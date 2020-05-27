@@ -21,6 +21,7 @@ import torch.nn.functional as F
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
+import torch.multiprocessing as mp
 import time
 
 parser = argparse.ArgumentParser(description='Train a network.')
@@ -53,6 +54,9 @@ parser.add_argument('--iter', type=int, default=1e100, help='training iteration'
 parser.add_argument('--stream', type=str, default='nccl_test', help='job_stream')
 #launch script need "--local_rank"
 parser.add_argument("--local_rank", default=0, type=int)
+parser.add_argument("--gpu", default=None, type=int)
+parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
+                    help='url used to set up distributed training')
 
 
 args = parser.parse_args()
@@ -67,7 +71,7 @@ if not os.path.exists(args.save_path):
     os.makedirs(args.save_path)
 
 
-def run():
+def run(gpu, ngpus_per_node, args):
 
 #     cudnn.benchmark = True
 #     torch.cuda.set_device(args.local_rank)
@@ -78,19 +82,25 @@ def run():
 #     args.rank = dist.get_rank()
 #     # args.local_rank = int(os.environ.get('LOCALRANK', args.local_rank))
 #     args.total_batch_size = (args.batch_size) * dist.get_world_size()
-    def dist_init(host_addr, rank, local_rank, world_size, port=23456):
-        host_addr_full = 'tcp://' + host_addr + ':' + str(port)
-        torch.distributed.init_process_group("nccl", init_method=host_addr_full,
-                                         rank=rank, world_size=world_size)
-        num_gpus = torch.cuda.device_count()
-        torch.cuda.set_device(local_rank)
-        assert torch.distributed.is_initialized()
+#     def dist_init(host_addr, rank, local_rank, world_size, port=23456):
+#         host_addr_full = 'tcp://' + host_addr + ':' + str(port)
+#         torch.distributed.init_process_group("nccl", init_method=host_addr_full,
+#                                          rank=rank, world_size=world_size)
+#         num_gpus = torch.cuda.device_count()
+#         torch.cuda.set_device(local_rank)
+#         assert torch.distributed.is_initialized()
 
-    args.rank = int(os.environ['SLURM_PROCID'])
-    args.local_rank = int(os.environ['SLURM_LOCALID'])
-    args.world_size = int(os.environ['SLURM_NTASKS'])
-    args.ip = get_ip(os.environ['SLURM_STEP_NODELIST'])
-    dist_init(args.ip, args.rank, args.local_rank, args.world_size)
+#     args.rank = int(os.environ['SLURM_PROCID'])
+#     args.local_rank = int(os.environ['SLURM_LOCALID'])
+#     args.world_size = int(os.environ['SLURM_NTASKS'])
+#     args.ip = get_ip(os.environ['SLURM_STEP_NODELIST'])
+    #ngpus_per_node = torch.cuda.device_count()
+    
+    #dist_init(args.ip, args.rank, args.local_rank, args.world_size)
+    args.rank = args.rank * ngpus_per_node + gpu
+    dist.init_process_group(backend='nccl', init_method=args.dist_url,
+                                world_size=args.world_size, rank=args.rank)
+    
     global resume_iter
     """model_log"""
     input_size_r = list(args.input_size)
@@ -211,7 +221,7 @@ def run():
         precision = 1.0 * tp / max(tp + fp, 1)
         recall = 1.0 * tp / max(tp + fn, 1)
         accuracy = 1.0 * (tp + tn) / (tp + tn + fp + fn)
-        if args.rank == 0:
+        if args.rank % ngpus_per_node == 0:
             print('[Iter_{}:, loss: {:.4}, Precision: {:.2f}%, Recall: {:.2f}%, Accuracy: {:.2f}%]\r'.format(
             cnt, loss.item(), precision*100, recall*100, accuracy * 100))
 
@@ -237,7 +247,7 @@ def run():
         """model_saving_(iter)"""
 
 
-        if (cnt % args.save_interval) == 0 and args.rank == 0:
+        if (cnt % args.save_interval) == 0 and (args.rank % ngpus_per_node) == 0:
             tp = fp = tn = fn = 0
             #t_last = t_curr
             #best_loss = loss.item()
@@ -263,7 +273,12 @@ def run():
             f_o.close()
             f_l.close()
 
-
+def main():
+    ngpus_per_node = torch.cuda.device_count()
+    args.world_size = ngpus_per_node * args.world_size
+        # Use torch.multiprocessing.spawn to launch distributed processes: the
+        # main_worker process function
+    mp.spawn(run, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
 if __name__ == "__main__":
     seed = int(time.time())
     random.seed(seed)
