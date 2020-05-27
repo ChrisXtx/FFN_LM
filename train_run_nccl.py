@@ -71,15 +71,15 @@ if not os.path.exists(args.save_path):
     os.makedirs(args.save_path)
 
 
-def run(gpu, ngpus_per_node, args):
+def run():
 
-#     cudnn.benchmark = True
-#     torch.cuda.set_device(args.local_rank)
+    cudnn.benchmark = True
+    torch.cuda.set_device(args.local_rank)
     
 #     # will read env master_addr master_port world_size
-#     torch.distributed.init_process_group(backend='nccl', init_method="env://")
-#     args.world_size = dist.get_world_size()
-#     args.rank = dist.get_rank()
+    torch.distributed.init_process_group(backend='nccl')
+    args.world_size = dist.get_world_size()
+    args.rank = dist.get_rank()
 #     # args.local_rank = int(os.environ.get('LOCALRANK', args.local_rank))
 #     args.total_batch_size = (args.batch_size) * dist.get_world_size()
 #     def dist_init(host_addr, rank, local_rank, world_size, port=23456):
@@ -97,9 +97,9 @@ def run(gpu, ngpus_per_node, args):
     #ngpus_per_node = torch.cuda.device_count()
     
     #dist_init(args.ip, args.rank, args.local_rank, args.world_size)
-    args.rank = args.rank * ngpus_per_node + gpu
-    dist.init_process_group(backend='nccl', init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
+#     args.rank = args.rank * ngpus_per_node + gpu
+#     dist.init_process_group(backend='nccl', init_method=args.dist_url,
+#                                 world_size=args.world_size, rank=args.rank)
     
     global resume_iter
     """model_log"""
@@ -221,7 +221,7 @@ def run(gpu, ngpus_per_node, args):
         precision = 1.0 * tp / max(tp + fp, 1)
         recall = 1.0 * tp / max(tp + fn, 1)
         accuracy = 1.0 * (tp + tn) / (tp + tn + fp + fn)
-        if args.rank % ngpus_per_node == 0:
+        if args.rank == 0:
             print('[Iter_{}:, loss: {:.4}, Precision: {:.2f}%, Recall: {:.2f}%, Accuracy: {:.2f}%]\r'.format(
             cnt, loss.item(), precision*100, recall*100, accuracy * 100))
 
@@ -247,7 +247,7 @@ def run(gpu, ngpus_per_node, args):
         """model_saving_(iter)"""
 
 
-        if (cnt % args.save_interval) == 0 and (args.rank % ngpus_per_node) == 0:
+        if (cnt % args.save_interval) == 0 and args.rank == 0:
             tp = fp = tn = fn = 0
             #t_last = t_curr
             #best_loss = loss.item()
