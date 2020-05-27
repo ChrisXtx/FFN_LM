@@ -124,7 +124,7 @@ def run():
     """model_construction"""
     model = FFN(in_channels=4, out_channels=1, input_size=args.input_size, delta=args.delta, depth=args.depth).cuda()
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], find_unused_parameters=True)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
 
     """data_load"""
@@ -273,12 +273,12 @@ def run():
             f_o.close()
             f_l.close()
 
-def main():
-    ngpus_per_node = torch.cuda.device_count()
-    args.world_size = ngpus_per_node * args.world_size
-        # Use torch.multiprocessing.spawn to launch distributed processes: the
-        # main_worker process function
-    mp.spawn(run, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+# def main():
+#     ngpus_per_node = torch.cuda.device_count()
+#     args.world_size = ngpus_per_node * args.world_size
+#         # Use torch.multiprocessing.spawn to launch distributed processes: the
+#         # main_worker process function
+#     mp.spawn(run, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
 if __name__ == "__main__":
     seed = int(time.time())
     random.seed(seed)
