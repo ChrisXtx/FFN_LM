@@ -3,17 +3,17 @@ import h5py
 import argparse
 from core.models.ffn import FFN
 from core.data.utils import *
-
+from collections import OrderedDict
 parser = argparse.ArgumentParser(description='inference script')
-parser.add_argument('--data', type=str, default='./data_raw3_focus_250_filter1_top_area64.h5', help='input images')
-parser.add_argument('--label', type=str, default='./pred.h5', help='input images')
-parser.add_argument('--model', type=str, default='/home/x903102883/FFN_LM/model/ffn.pth', help='path to ffn model')
-parser.add_argument('--delta', default=(5, 5, 5), help='delta offset')
-parser.add_argument('--input_size', default=(55,55,55), help='input size')
-parser.add_argument('--depth', type=int, default=22, help='depth of ffn')
-parser.add_argument('--seg_thr', type=float, default=0.5, help='input size')
-parser.add_argument('--mov_thr', type=float, default=0.5, help='input size')
-parser.add_argument('--act_thr', type=float, default=0.95, help='input size')
+parser.add_argument('--data', type=str, default='/home/x903102883/2017EXBB/train_data_sep_dense_coord/dense/(0, 1024, 0)_raw.h5', help='input images')
+#parser.add_argument('--label', type=str, default='./pred.h5', help='input images')
+parser.add_argument('--model', type=str, default='/home/x903102883/Desktop/ffn_model_fov_51_delta_15_depth_12 (1).pth', help='path to ffn model')
+parser.add_argument('--delta', default=(15, 15, 15), help='delta offset')
+parser.add_argument('--input_size', default=(51,51,51), help='input size')
+parser.add_argument('--depth', type=int, default=12, help='depth of ffn')
+parser.add_argument('--seg_thr', type=float, default=0.7, help='input size')
+parser.add_argument('--mov_thr', type=float, default=0.8, help='input size')
+parser.add_argument('--act_thr', type=float, default=0.9, help='input size')
 
 args = parser.parse_args()
 
@@ -24,8 +24,7 @@ def run():
 
     assert os.path.isfile(args.model)
 
-    
-    model.load_state_dict(torch.load(args.model))
+    model.load_state_dict(torch.load(args.model),strict=False)
     model.eval()
 
     
@@ -33,10 +32,10 @@ def run():
         images = (f['/image'][()].astype(np.float32) - 128) / 33
         # labels = g['label'].value
 
+    seed_list = []
+    canva = Canvas(model, images, seed_list,args.input_size, args.delta, args.seg_thr, args.mov_thr, args.act_thr)
     
-    canva = Canvas(model, images, args.input_size, args.delta, args.seg_thr, args.mov_thr, args.act_thr)
-    
-    canva.segment_at((159, 121, 158))
+    canva.segment_at((106, 137, 173),1)
 
 
     #canva.segment_all()
