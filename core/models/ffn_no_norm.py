@@ -25,7 +25,7 @@ class ResBlock(nn.Module):
 class FFN_no_norm(nn.Module):
     def __init__(self, in_channels=2, mid_channels=32, out_channels=1, kernel_size=(3, 3, 3), padding=1, depth=12,
                  input_size=[33, 33, 33], delta=[8, 8, 8]):
-        super(FFN, self).__init__()
+        super(FFN_no_norm, self).__init__()
 
         self.conv0 = nn.Conv3d(in_channels, mid_channels, kernel_size, padding=padding)
         #self.gn0 = nn.GroupNorm(int(mid_channels/2),mid_channels)
