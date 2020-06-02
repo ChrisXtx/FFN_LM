@@ -21,14 +21,13 @@ import torch.nn.functional as F
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
-import torch.multiprocessing as mp
 import time
 
 parser = argparse.ArgumentParser(description='Train a network.')
 parser.add_argument('--deterministic', action='store_true',
     help='Run in fully deterministic mode (at the cost of execution speed).')
 
-parser.add_argument('-train_data', '--train_data_dir', type=str, default='/home/xiaotx/2017EXBB/train_data/thick_dense_sparse_coord_d/', help='training data')
+parser.add_argument('-train_data', '--train_data_dir', type=str, default='./data/dense_sparse_thick/', help='training data')
 parser.add_argument('-b', '--batch_size', type=int, default=8, help='training batch size')
 #parser.add_argument('--lr', type=float, default=1e-4, help='training learning rate')
 parser.add_argument('--gamma', type=float, default=0.9, help='multiplicative factor of learning rate decay')
@@ -38,11 +37,9 @@ parser.add_argument('--delta', default=(15, 15, 15), help='delta offset')
 parser.add_argument('--input_size', default=(51, 51, 51), help ='input size')
 
 parser.add_argument('--resume', type=str, default=None, help='resume training')
-parser.add_argument('--save_path', type=str, default='/home/xiaotx/2017EXBB/model', help='model save path')
+parser.add_argument('--save_path', type=str, default='./model', help='model save path')
 parser.add_argument('--save_interval', type=str, default=1000, help='model save interval')
-parser.add_argument('--log_save_path', type=str, default='/home/xiaotx/2017EXBB/model/model_log/', help='model_log save path')
-
-
+parser.add_argument('--log_save_path', type=str, default='./model/model_log/', help='model_log save path')
 
 
 
@@ -51,89 +48,80 @@ parser.add_argument('--interval', type=int, default=120, help='How often to save
 parser.add_argument('--iter', type=int, default=1e100, help='training iteration')
 
 
-parser.add_argument('--stream', type=str, default='nccl_test', help='job_stream')
+parser.add_argument('--stream', type=int, default=4, help='job_stream')
 #launch script need "--local_rank"
 parser.add_argument("--local_rank", default=0, type=int)
-parser.add_argument("--gpu", default=None, type=int)
-parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
-                    help='url used to set up distributed training')
+#parser.add_argument('--dist-backend', type=str, default='ddl')
 
 
 args = parser.parse_args()
 
-deterministic = args.deterministic
-if deterministic:
-    torch.backends.cudnn.deterministic = True
-else:
-    torch.backends.cudnn.benchmark = True  # Improves overall performance in *most* cases
+# deterministic = args.deterministic
+# if deterministic:
+#     torch.backends.cudnn.deterministic = True
+# else:
+#     torch.backends.cudnn.benchmark = True  # Improves overall performance in *most* cases
 
-if not os.path.exists(args.save_path):
-    os.makedirs(args.save_path)
+# if not os.path.exists(args.save_path):
+#     os.makedirs(args.save_path)
 
 
-def run():
+def run(args):
 
+    # world_size, rank = None, None
+    # if args.dist_backend in ['mpi', 'ddl']:
+    #     lrank = int(os.getenv('OMPI_COMM_WORLD_LOCAL_RANK'))
+    #     dist.init_process_group(backend=args.dist_backend, init_method='env://')
+    #     world_size = dist.get_world_size()
+    #     rank = dist.get_rank()
+    #     args.distributed = True
+    
+    # device = torch.device("cuda:{}".format(lrank))
     cudnn.benchmark = True
     torch.cuda.set_device(args.local_rank)
     
-#     # will read env master_addr master_port world_size
+    # # will read env master_addr master_port world_size
+    cudnn.benchmark = True
     torch.distributed.init_process_group(backend='nccl')
     args.world_size = dist.get_world_size()
     args.rank = dist.get_rank()
-#     # args.local_rank = int(os.environ.get('LOCALRANK', args.local_rank))
-#     args.total_batch_size = (args.batch_size) * dist.get_world_size()
-#     def dist_init(host_addr, rank, local_rank, world_size, port=23456):
-#         host_addr_full = 'tcp://' + host_addr + ':' + str(port)
-#         torch.distributed.init_process_group("nccl", init_method=host_addr_full,
-#                                          rank=rank, world_size=world_size)
-#         num_gpus = torch.cuda.device_count()
-#         torch.cuda.set_device(local_rank)
-#         assert torch.distributed.is_initialized()
-
-#     args.rank = int(os.environ['SLURM_PROCID'])
-#     args.local_rank = int(os.environ['SLURM_LOCALID'])
-#     args.world_size = int(os.environ['SLURM_NTASKS'])
-#     args.ip = get_ip(os.environ['SLURM_STEP_NODELIST'])
-    #ngpus_per_node = torch.cuda.device_count()
-    
-    #dist_init(args.ip, args.rank, args.local_rank, args.world_size)
-#     args.rank = args.rank * ngpus_per_node + gpu
-#     dist.init_process_group(backend='nccl', init_method=args.dist_url,
-#                                 world_size=args.world_size, rank=args.rank)
+    # args.local_rank = int(os.environ.get('LOCALRANK', args.local_rank))
+    args.total_batch_size = (args.batch_size) * dist.get_world_size()
     
     global resume_iter
     """model_log"""
     input_size_r = list(args.input_size)
     delta_r = list(args.delta)
 
-    path = args.log_save_path + "model_log_fov:{}_delta:{}_depth:{}".format(input_size_r [0],delta_r[0],args.depth)
-    filesize = os.path.getsize(path)
-    if filesize == 0:
+    # path = args.log_save_path + "model_log_fov:{}_delta:{}_depth:{}".format(input_size_r[0],delta_r[0],args.depth)
+    # filesize = os.path.getsize(path)
+    # if filesize == 0:
 
-        f = open(path, 'wb')
-        data_start = {'chris': "xtx"}
-        pickle.dump(data_start, f)
-        f.close()
-    else:
-        f = open(path, 'rb')
-        data = pickle.load(f)
-        resume_iter = len(data.keys())-1
-        f.close()
+    #     f = open(path, 'wb')
+    #     data_start = {'chris': "xtx"}
+    #     pickle.dump(data_start, f)
+    #     f.close()
+    # else:
+    #     f = open(path, 'rb')
+    #     data = pickle.load(f)
+    #     resume_iter = len(data.keys())-1
+    #     f.close()
 
 
     """model_construction"""
     model = FFN(in_channels=4, out_channels=1, input_size=args.input_size, delta=args.delta, depth=args.depth).cuda()
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
 
-
+    #torch.cuda.set_enabled_lms(True)
     """data_load"""
     if args.resume is not None:
-        model.load_state_dict(torch.load(args.resume))
+        #model.load_state_dict(torch.load(args.resume), map_location=torch.device('cpu'))
+        model.load_state_dict(torch.load(args.resum), map_location=lambda storage, loc: storage)
 
 
     abs_path_training_data = args.train_data_dir
-    entries_train_data = Path(abs_path_training_data )
+    entries_train_data = Path(abs_path_training_data)
     files_train_data = []
 
     for entry in entries_train_data.iterdir():
@@ -148,7 +136,7 @@ def run():
     train_loader_dict = {}
     batch_it_dict = {}
     train_sampler_dict = {}
-
+    
     for index in range(files_total):
         input_h5data_dict[index] = [(abs_path_training_data + sorted_files_train_data[index])]
         print(input_h5data_dict[index])
@@ -191,11 +179,11 @@ def run():
 
         t_curr = time.time()
 
-        labels = labels.cuda(non_blocking=True)
+        #labels = labels.cuda()
 
         torch_seed = torch.from_numpy(seeds).cuda(non_blocking=True)
         input_data = torch.cat([images, torch_seed], dim=1)
-        input_data = Variable(input_data.cuda(non_blocking=True))
+        #input_data = Variable(input_data.to(device))
 
         logits = model(input_data)
         updated = torch_seed + logits
@@ -221,6 +209,11 @@ def run():
         precision = 1.0 * tp / max(tp + fp, 1)
         recall = 1.0 * tp / max(tp + fn, 1)
         accuracy = 1.0 * (tp + tn) / (tp + tn + fp + fn)
+        reduced_precision = reduce_tensor(precision.data, avg=False)
+        reduced_recall = reduce_tensor(recall.data, avg=False)
+        reduced_accuracy = reduce_tensor(accuracy.data, avg=False)
+        reduced_loss = reduce_tensor(loss.data)
+
         if args.rank == 0:
             print('[Iter_{}:, loss: {:.4}, Precision: {:.2f}%, Recall: {:.2f}%, Accuracy: {:.2f}%]\r'.format(
             cnt, loss.item(), precision*100, recall*100, accuracy * 100))
@@ -258,30 +251,31 @@ def run():
                 precision * 100, recall * 100, accuracy * 100))
 
 
-            path = args.log_save_path + "model_log_fov:{}_delta:{}_depth:{}".format(input_size_r [0],delta_r[0],args.depth)
-            model_eval = "precision#" + str('%.4f' % (precision * 100)) + "#recall#" + str('%.4f' % (recall * 100)) + "#accuracy#" + str('%.4f' % (accuracy * 100))
+            # path = args.log_save_path + "model_log_fov:{}_delta:{}_depth:{}".format(input_size_r [0],delta_r[0],args.depth)
+            # model_eval = "precision#" + str('%.4f' % (precision * 100)) + "#recall#" + str('%.4f' % (recall * 100)) + "#accuracy#" + str('%.4f' % (accuracy * 100))
 
-            f_l = open(path, 'rb')
-            data = pickle.load(f_l)
+            # f_l = open(path, 'rb')
+            # data = pickle.load(f_l)
 
-            key =  cnt/args.save_interval + resume_iter
-            data[key] = model_eval
+            # key =  cnt/args.save_interval + resume_iter
+            # data[key] = model_eval
 
-            f_o = open(path, 'wb')
-            pickle.dump(data, f_o)
+            # f_o = open(path, 'wb')
+            # pickle.dump(data, f_o)
 
-            f_o.close()
-            f_l.close()
+            # f_o.close()
+            # f_l.close()
+def reduce_tensor(tensor, avg=True):
+    rt = tensor.clone()
+    dist.all_reduce(rt, op=dist.ReduceOp.SUM)
+    if avg:
+        rt /= args.world_size
+    return rt
 
-# def main():
-#     ngpus_per_node = torch.cuda.device_count()
-#     args.world_size = ngpus_per_node * args.world_size
-#         # Use torch.multiprocessing.spawn to launch distributed processes: the
-#         # main_worker process function
-#     mp.spawn(run, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
 if __name__ == "__main__":
     seed = int(time.time())
     random.seed(seed)
     time1 = time.time()
-    run()
+    args = parser.parse_args()
+    run(args)
     print("run time:", time.time() - time1)
