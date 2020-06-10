@@ -590,8 +590,23 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
 
 
 class Canvas(object):
+    """Summary."""
 
-    def __init__(self, model, images, seed_list, size, delta, seg_thr, mov_thr, act_thr, data_save_path):
+    def __init__(self, model, images, seed_list, size, delta, seg_thr,
+                 mov_thr, act_thr, data_save_path):
+        """Initialize the canvas.
+
+        Args:
+          model: FFN Model object
+          images: 3d ndarray-like of shape (z, y, x)
+          seed_list: List of seed positions each of shape (z, y, x)
+          size: Field of view (FOV) size
+          delta: Step size
+          seg_thr: Segment threshold
+          mov_thr: Move Threshold
+          act_thr: Act Threshold
+          data_save_path: Path for output
+        """
         self.model = model
         self.images = images
         self.shape = images.shape[:-1]
@@ -601,7 +616,6 @@ class Canvas(object):
         self.mov_thr = logit(mov_thr)
         self.act_thr = logit(act_thr)
 
-
         self.data_save_path = data_save_path
         self.segmented_mask = np.zeros(self.shape, dtype=np.int32)
         self.done_mask = np.zeros(self.shape, dtype=bool)
@@ -610,13 +624,10 @@ class Canvas(object):
         self.seed = np.zeros(self.shape, dtype=np.float32)
         self.seg_prob = np.zeros(self.shape, dtype=np.uint8)
 
-
         self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)   # temp save out (pred_mask) for each step
         self.save_count = 0
         self.save_interval = 1
         self.target_dic = {}
-
-
 
         self.seed_policy = None
         self.seed_list = seed_list
@@ -624,7 +635,6 @@ class Canvas(object):
         # Maps of segment id -> ..
         self.origins = {}  # seed location
         self.overlaps = {}  # (ids, number overlapping voxels)
-
 
         self.movement_policy = FaceMaxMovementPolicy(self, deltas=delta, score_threshold=self.mov_thr)
         self.reset_state((0, 0, 0))
@@ -760,29 +770,33 @@ class Canvas(object):
         return logits, sel, sel_cent
 
     def segment_at(self, start_pos, id):
+        """Summary.
 
+        Args:
+          start_pos: Start seed position of shape (z, y, x)
+          id: Process id
+        """
         try:
             if not self.is_valid_pos(start_pos, ignore_move_threshold=True):
                 return
-            #if self.segmented_mask[start_pos] != 0:
-                #return
-            #if self.done_mask[start_pos] != 0:
-                #return
+            # if self.segmented_mask[start_pos] != 0:
+                # return
+            # if self.done_mask[start_pos] != 0:
+                # return
 
             self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)
             step_iters = 0
 
-
             # orignal code
-            #self.segmentation = np.zeros(self.shape, dtype=np.int32)
+            # self.segmentation = np.zeros(self.shape, dtype=np.int32)
             self.seed = np.zeros(self.shape, dtype=np.float32)
             self.seg_prob = np.zeros(self.shape, dtype=np.uint8)
             self.init_seed(start_pos)
             self.reset_state(start_pos)
 
             if not self.movement_policy:
-                # Add first element with arbitrary priority 1 (it will be consumed
-                # right away anyway).
+                # Add first element with arbitrary priority 1 (it will be
+                # consumed right away anyway).
                 item = (self.movement_policy.score_threshold * 2, start_pos)
                 self.movement_policy.append(item)
 
@@ -805,24 +819,19 @@ class Canvas(object):
                 self._min_pos = np.minimum(self._min_pos, pos)
                 self._max_pos = np.maximum(self._max_pos, pos)
 
-
                 try:
                     mask = self.seed[tuple(sel_i_s)] >= self.seg_thr
                     self.seg_prob_i[tuple(sel_i_s)][mask] = quantize_probability(expit(self.seed[tuple(sel_i_s)][mask]))
                 except RuntimeError:
                     return False
                 # save the pred_mask out for each step
-                #skimage.io.imsave('./data/FFN_object1_inf_{}_step{}.tif'.format(id, num_iters), self.seg_prob_i)
+                # skimage.io.imsave('./data/FFN_object1_inf_{}_step{}.tif'.format(id, num_iters), self.seg_prob_i)
 
-
-                """update_movable_location"""
+                # Update_movable_location
                 self.movement_policy.update(pred, pos)
                 assert np.all(pred.shape == self.input_size)
 
-
-
-
-            # agglomeration_code
+            # Agglomeration code
 
             try:
                 mask = self.seed[tuple(sel_i_s)] >= self.seg_thr
@@ -832,7 +841,6 @@ class Canvas(object):
             mask_seg_prob_i = (self.seg_prob_i >= 128)
             self.done_mask[mask_seg_prob_i] = True
 
-
             if np.sum(mask_seg_prob_i) >= 400:
 
                 seg_prob_mask = (self.seg_prob_i > 128)         # pred_mask of current seed
@@ -840,7 +848,6 @@ class Canvas(object):
 
                 segmented_mask = (self.segmented_mask != 0)                 # segmented mask form previous seeds
                 overlap_mask = (seg_prob_mask * segmented_mask)             # overlap of this inference run with previous segmented mask
-
 
                 ids_of_overlap_list, counts_of_id_overlap = np.unique(self.segmented_mask[overlap_mask],return_counts=True)
                 id_overlap_dict = dict(zip(ids_of_overlap_list, counts_of_id_overlap))
@@ -859,7 +866,6 @@ class Canvas(object):
 
                         overlap_voxels = id_overlap_dict[id_of_overlap]
 
-
                         ratio1 = overlap_voxels / num_seg_voxels_current_seed  # overlap / seg_mask from current_seed
                         ratio2 = overlap_voxels / overlapped_id_num            # overlap / previous seg specific id mask
 
@@ -872,13 +878,10 @@ class Canvas(object):
                             merge_list.append(id_of_overlap)
                             print("merged_id=", id_of_overlap)
 
-
                 self.segmented_mask[seg_prob_mask] = id
                 for id_for_merge in merge_list:
                     id_for_merge_mask = (self.segmented_mask == id_for_merge)
                     self.segmented_mask[id_for_merge_mask] = id
-
-
 
                 # stacked_img = np.stack((self.segmented_mask,) * 3, axis=-1)
                 # stacked_img[tuple(sel_cent_s)] = (250, 0, 0)
@@ -914,7 +917,7 @@ class Canvas(object):
             return False
 
     def segment_all(self):
-
+        """Summary."""
         mbd = np.array([1, 1, 1])
         iter = 0
         # print()
