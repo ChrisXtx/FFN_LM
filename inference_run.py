@@ -81,7 +81,6 @@ def run():
     # canva.segment_all()
 
     # result = canva.segmentation
-    #
     # max_value = result.max()
     # indice, count = np.unique(result, return_counts=True)
     # result[result == -1] = 0
