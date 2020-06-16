@@ -7,12 +7,11 @@ from core.data.utils import *
 from core.tool.tools import *
 from core.tool.SWC.swc_parser import *
 
-
 parser = argparse.ArgumentParser(description='inference script')
-parser.add_argument('--data', type=str, default='/home/x903102883/2017EXBB/inference_test/Fused_test_sample2/Fused_RGB_down2_sample2.tif', help='input images')
-parser.add_argument('--swc', type=str, default='/home/x903102883/2017EXBB/inference_test/Fused_test_sample2/Fused_test_sample2.swc', help='SWC_skeletons')
-parser.add_argument('--model', type=str, default='/home/x903102883/xtx/FFN_LM_v0.2/model/model_down2_39_10/bound_40_testffn_model_fov:39_delta:10_depth:26_recall82.9596083175144.pth', help='path to ffn model')
-parser.add_argument('--data_save', type=str, default='/home/x903102883/xtx/FFN_LM_v0.2/data/agglomeration_sample/Fused_test_sample2/seedOnseged_ratio_0.2/', help='SWC_skeletons')
+parser.add_argument('--data', type=str, default='./Fused_RGB_down2_sample2.tif', help='input images')
+parser.add_argument('--swc', type=str, default='./Fused_test_sample2.swc', help='SWC_skeletons')
+parser.add_argument('--model', type=str, default='./ffn_model_fov:39_delta:10_depth:26_recall82.9596083175144.pth', help='path to ffn model')
+parser.add_argument('--data_save', type=str, default='./Fused_test_sample2/seedOnseged_ratio_0.2/', help='segmentation save path')
 
 parser.add_argument('--save_interval', type=int, default=20, help='frequency_of_display_saving')
 parser.add_argument('--buffer_distance', type=int, default=0, help='swc_skeletons_dis_from_overlap')
