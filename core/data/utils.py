@@ -18,6 +18,7 @@ import cv2
 import skimage
 from scipy.stats import stats
 import os
+import h5py
 
 MAX_SELF_CONSISTENT_ITERS = 32
 HALT_SILENT = 0
@@ -33,7 +34,7 @@ def sigmoid(x):
 
 
 def make_seed(shape, pad=0.05, seed=0.95):
-    """创建种子"""
+    """seed——init"""
     seed_array = np.full(list(shape), pad, dtype=np.float32)
     idx = tuple([slice(None)] + list(np.array(shape) // 2))
     seed_array[idx] = seed
@@ -41,7 +42,7 @@ def make_seed(shape, pad=0.05, seed=0.95):
 
 
 def fixed_offsets(seed, fov_moves, threshold=0.8):
-    """offset偏移."""
+    """offsets to deltas."""
     for off in itertools.chain([(0, 0, 0)], fov_moves):
         is_valid_move = seed[0,
                              seed.shape[1] // 2 + off[2],
@@ -56,13 +57,13 @@ def fixed_offsets(seed, fov_moves, threshold=0.8):
 
 
 def center_crop_and_pad(data, coor, target_shape):
-    """根据中心坐标 crop patch"""
+    """crop patch based on center coordinate"""
     target_shape = np.array(target_shape)
 
     start = coor - target_shape // 2
     end = start + target_shape
 
-    #assert np.all(start >= 0)
+    # assert np.all(start >= 0)
 
     selector = [slice(s, e) for s, e in zip(start, end)]
     cropped = data[tuple(selector)]
@@ -93,7 +94,7 @@ def center_crop_and_pad(data, coor, target_shape):
 
 
 def crop_and_pad(data, offset, crop_shape, target_shape=None):
-    """根据offset crop patch"""
+    """crop patch based on offset"""
     # Spatial dimensions only. All vars in zyx.
     shape = np.array(data.shape[1:])
     crop_shape = np.array(crop_shape)
@@ -207,70 +208,6 @@ def self_prediction_halt(
     return HaltInfo(_halt_signaler, ['self_prediction'])
 
 
-class BaseSeedPolicy(object):
-    """Base class for seed policies."""
-
-    def __init__(self, canvas, **kwargs):
-        """Initializes the policy.
-
-        Args:
-          canvas: inference Canvas object; simple policies use this to access
-              basic geometry information such as the shape of the subvolume;
-              more complex policies can access the raw image data, etc.
-          **kwargs: other keyword arguments
-        """
-        del kwargs
-        # TODO(mjanusz): Remove circular reference between Canvas and seed policies.
-        self.canvas = weakref.proxy(canvas)
-        self.coords = None
-        self.idx = 0
-
-        self._init_coords()
-
-    def _init_coords(self):
-        raise NotImplementedError()
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        """Returns the next seed point as (z, y, x).
-
-        Does initial filtering of seed points to exclude locations that are
-        too close to the image border.
-
-        Returns:
-          (z, y, x) tuples.
-
-        Raises:
-          StopIteration when the seeds are exhausted.
-        """
-        if self.coords is None:
-            self._init_coords()
-
-        while self.idx < self.coords.shape[0]:
-            curr = self.coords[self.idx, :]
-            self.idx += 1
-
-            # TODO(mjanusz): Get rid of this.
-            # Do early filtering of clearly invalid locations (too close to image
-            # borders) as late filtering might be expensive.
-            if (np.all(curr - self.canvas.margin >= 0) and
-                    np.all(curr + self.canvas.margin < self.canvas.shape)):
-                yield tuple(curr)  # z, y, x
-
-        raise StopIteration()
-
-    def next(self):
-        return self.__next__()
-
-    def get_state(self):
-        return self.coords, self.idx
-
-    def set_state(self, state):
-        self.coords, self.idx = state
-
-
 def quantize_probability(prob):
     """Quantizes a probability map into a byte array."""
     ret = np.digitize(prob, np.linspace(0.0, 1.0, 255))
@@ -280,7 +217,7 @@ def quantize_probability(prob):
     return ret.astype(np.uint8)
 
 
-def get_scored_move_offsets(deltas, prob_map, threshold=0.8):
+def get_scored_move_offsets(deltas, prob_map, threshold=0.8, flex_faces=1):
     """Looks for potential moves for a FFN.
 
     The possible moves are determined by extracting probability map values
@@ -292,6 +229,7 @@ def get_scored_move_offsets(deltas, prob_map, threshold=0.8):
       prob_map: current probability map as a (z,y,x) numpy array
       threshold: minimum score required at the new FoV center for a move to be
           considered valid
+      flex_faces : multipliers of the faces
 
     Yields:
       tuples of:
@@ -301,171 +239,61 @@ def get_scored_move_offsets(deltas, prob_map, threshold=0.8):
       The order of the returned tuples is arbitrary and should not be depended
       upon. In particular, the tuples are not necessarily sorted by score.
     """
-    center = np.array(prob_map.shape) // 2
-    assert center.size == 3
-    # Selects a working subvolume no more than +/- delta away from the current
-    # center point.
-    subvol_sel = [slice(c - dx, c + dx + 1) for c, dx
-                  in zip(center, deltas)]
-
-    done = set()
-    for axis, axis_delta in enumerate(deltas):
-        if axis_delta == 0:
-            continue
-        for axis_offset in (-axis_delta, axis_delta):
-            # Move exactly by the delta along the current axis, and select the face
-            # of the subvolume orthogonal to the current axis.
-            face_sel = subvol_sel[:]
-            face_sel[axis] = axis_offset + center[axis]
-            face_prob = prob_map[tuple(face_sel)]
-            shape = face_prob.shape
-
-            # Find voxel with maximum activation.
-            face_pos = np.unravel_index(face_prob.argmax(), shape)
-            score = face_prob[face_pos]
-
-            # Only move if activation crosses threshold.
-            if score < threshold:
-                continue
-
-            # Convert within-face position to be relative vs the center of the face.
-            relative_pos = [face_pos[0] - shape[0] // 2, face_pos[1] - shape[1] // 2]
-            relative_pos.insert(axis, axis_offset)
-
-            ret = (score, tuple(relative_pos))
-
-            if ret not in done:
-                done.add(ret)
-                yield ret
-
-    if deltas[0] % 2 == 1:
-        deltas_even = deltas + 1
-    else:
-        deltas_even = deltas
-    deltas_half = deltas_even / 2
-    deltas_half = [int(deltas_half[0]), int(deltas_half[1]), int(deltas_half[2])]
-    subvol_sel_half = [slice(c - dx, c + dx + 1) for c, dx
-                       in zip(center, deltas_half)]
-
-    for axis, axis_delta in enumerate(deltas_half):
-        if axis_delta == 0:
-            continue
-        for axis_offset in (-axis_delta, axis_delta):
-            # Move exactly by the delta along the current axis, and select the face
-            # of the subvolume orthogonal to the current axis.
-            face_sel = subvol_sel_half[:]
-            face_sel[axis] = axis_offset + center[axis]
-            face_prob = prob_map[tuple(face_sel)]
-            shape = face_prob.shape
-
-            # Find voxel with maximum activation.
-            face_pos = np.unravel_index(face_prob.argmax(), shape)
-            score = face_prob[face_pos]
-
-            # Only move if activation crosses threshold.
-            if score < threshold:
-                continue
-
-            # Convert within-face position to be relative vs the center of the face.
-            relative_pos = [face_pos[0] - shape[0] // 2, face_pos[1] - shape[1] // 2]
-            relative_pos.insert(axis, axis_offset)
-
-            ret = (score, tuple(relative_pos))
-
-            if ret not in done:
-                done.add(ret)
-                yield ret
     
-    if deltas_half[0] % 2 == 1:
-        deltas_half_even = np.array(deltas_half) + 1
+    flex_deltas = [deltas]
+    if flex_faces == 0:
+        pass
     else:
-        deltas_half_even = deltas_half
-    deltas_half_even = np.array(deltas_half_even)
-    deltas_q = deltas_half_even / 2
-    deltas_q = [int(deltas_q[0]), int(deltas_q[1]), int(deltas_q[2])]
-    subvol_sel_half = [slice(c - dx, c + dx + 1) for c, dx
-                       in zip(center, deltas_q)]
-
-    for axis, axis_delta in enumerate(deltas_q):
-        if axis_delta == 0:
-            continue
-        for axis_offset in (-axis_delta, axis_delta):
-            # Move exactly by the delta along the current axis, and select the face
-            # of the subvolume orthogonal to the current axis.
-            face_sel = subvol_sel_half[:]
-            face_sel[axis] = axis_offset + center[axis]
-            face_prob = prob_map[tuple(face_sel)]
-            shape = face_prob.shape
-
-            # Find voxel with maximum activation.
-            face_pos = np.unravel_index(face_prob.argmax(), shape)
-            score = face_prob[face_pos]
-
-            # Only move if activation crosses threshold.
-            if score < threshold:
+        for flex in range(flex_faces):
+            if flex == 0:
                 continue
+            if (deltas[0] % flex * 2) != 0:
+                deltas_down = (deltas + (deltas[0] % flex * 2)) / flex * 2
+            else:
+                deltas_down = deltas / flex * 2
+            deltas_up = deltas * 2 * flex
+            deltas_down = [int(deltas_down[0]), int(deltas_down[1]), int(deltas_down[2])]
+            deltas_up = [int(deltas_up[0]), int(deltas_up[1]), int(deltas_up[2])]
+            flex_deltas.append(deltas_up)
+            flex_deltas.append(deltas_down)
 
-            # Convert within-face position to be relative vs the center of the face.
-            relative_pos = [face_pos[0] - shape[0] // 2, face_pos[1] - shape[1] // 2]
-            relative_pos.insert(axis, axis_offset)
+    for deltas in flex_deltas:
+        center = np.array(prob_map.shape) // 2
+        assert center.size == 3
+        # Selects a working subvolume no more than +/- delta away from the current
+        # center point.
+        subvol_sel = [slice(c - dx, c + dx + 1) for c, dx
+                      in zip(center, deltas)]
 
-            ret = (score, tuple(relative_pos))
+        done = set()
+        for axis, axis_delta in enumerate(deltas):
+            if axis_delta == 0:
+                continue
+            for axis_offset in (-axis_delta, axis_delta):
+                # Move exactly by the delta along the current axis, and select the face
+                # of the subvolume orthogonal to the current axis.
+                face_sel = subvol_sel[:]
+                face_sel[axis] = axis_offset + center[axis]
+                face_prob = prob_map[tuple(face_sel)]
+                shape = face_prob.shape
 
-            if ret not in done:
-                done.add(ret)
-                yield ret
-        
+                # Find voxel with maximum activation.
+                face_pos = np.unravel_index(face_prob.argmax(), shape)
+                score = face_prob[face_pos]
 
-class PolicyPeaks(BaseSeedPolicy):
-    """Attempts to find points away from edges in the image.
+                # Only move if activation crosses threshold.
+                if score < threshold:
+                    continue
 
-    Runs a 3d Sobel filter to detect edges in the raw data, followed
-    by a distance transform and peak finding to identify seed points.
-    """
+                # Convert within-face position to be relative vs the center of the face.
+                relative_pos = [face_pos[0] - shape[0] // 2, face_pos[1] - shape[1] // 2]
+                relative_pos.insert(axis, axis_offset)
 
-    def _init_coords(self):
-        logging.info('peaks: starting')
+                ret = (score, tuple(relative_pos))
 
-        # Edge detection.
-        gray = np.array([cv2.cvtColor(im, cv2.COLOR_BGR2GRAY) for im in self.canvas.images])
-        edges = ndimage.generic_gradient_magnitude(
-            gray.astype(np.float32),
-            ndimage.sobel)
-
-        # Adaptive thresholding.
-        sigma = 49.0 / 6.0
-        thresh_image = np.zeros(edges.shape, dtype=np.float32)
-        ndimage.gaussian_filter(edges, sigma, output=thresh_image, mode='reflect')
-        filt_edges = edges > thresh_image
-
-        del edges, thresh_image
-
-        # # This prevents a border effect where the large amount of masked area
-        # # screws up the distance transform below.
-        # if (self.canvas.restrictor is not None and
-        #         self.canvas.restrictor.mask is not None):
-        #     filt_edges[self.canvas.restrictor.mask] = 1
-
-        logging.info('peaks: filtering done')
-        dt = ndimage.distance_transform_edt(1 - filt_edges).astype(np.float32)
-        logging.info('peaks: edt done')
-
-        # Use a specifc seed for the noise so that results are reproducible
-        # regardless of what happens before the policy is called.
-        state = np.random.get_state()
-        np.random.seed(42)
-        idxs = skimage.feature.peak_local_max(
-            dt + np.random.random(dt.shape) * 1e-4,
-            indices=True, min_distance=1, threshold_abs=0, threshold_rel=0)
-        np.random.set_state(state)
-
-        # After skimage upgrade to 0.13.0 peak_local_max returns peaks in
-        # descending order, versus ascending order previously.  Sort ascending to
-        # maintain historic behavior.
-        idxs = np.array(sorted((z, y, x) for z, y, x in idxs))
-
-        logging.info('peaks: found %d local maxima', idxs.shape[0])
-        self.coords = idxs
+                if ret not in done:
+                    done.add(ret)
+                    yield ret
 
 
 class BaseMovementPolicy(object):
@@ -581,7 +409,7 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
         self.done_rounded_coords.add(qpos)
 
         scored_coords = get_scored_move_offsets(self.deltas, prob_map,
-                                                threshold=self.score_threshold)
+                                                threshold=self.score_threshold, flex_faces=1)
         scored_coords = sorted(scored_coords, reverse=True)
         for score, rel_coord in scored_coords:
             # convert to whole cube coordinates
@@ -590,23 +418,9 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
 
 
 class Canvas(object):
-    """Summary."""
 
-    def __init__(self, model, images, seed_list, size, delta, seg_thr,
-                 mov_thr, act_thr, data_save_path):
-        """Initialize the canvas.
-
-        Args:
-          model: FFN Model object
-          images: 3d ndarray-like of shape (z, y, x)
-          seed_list: List of seed positions each of shape (z, y, x)
-          size: Field of view (FOV) size
-          delta: Step size
-          seg_thr: Segment threshold
-          mov_thr: Move Threshold
-          act_thr: Act Threshold
-          data_save_path: Path for output
-        """
+    def __init__(self, model, images, seed_list, size, delta, seg_thr, mov_thr, act_thr, vox_thr, data_save_path,
+                 save_interval):
         self.model = model
         self.images = images
         self.shape = images.shape[:-1]
@@ -624,9 +438,10 @@ class Canvas(object):
         self.seed = np.zeros(self.shape, dtype=np.float32)
         self.seg_prob = np.zeros(self.shape, dtype=np.uint8)
 
-        self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)   # temp save out (pred_mask) for each step
+        self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)  # temp save out (pred mask) for each step
         self.save_count = 0
-        self.save_interval = 1
+        self.save_interval = save_interval
+        self.vox_thr = vox_thr
         self.target_dic = {}
 
         self.seed_policy = None
@@ -685,8 +500,8 @@ class Canvas(object):
             return False
 
         # Location already segmented?
-        #if self.segmentation[pos] > 0:
-            #return False
+        # if self.segmentation[pos] > 0:
+        # return False
 
         return True
 
@@ -742,11 +557,11 @@ class Canvas(object):
 
         prob_seed = expit(logit_seed)
         for _ in range(MAX_SELF_CONSISTENT_ITERS):
-            """网络inference"""
+            """model inference"""
             prob, logits = self.predict(pos)
             break
 
-        """更新seed"""
+        """update seed"""
         sel = [slice(s, e) for s, e in zip(start, end)]
         sel_cent = [slice(s, e) for s, e in zip(start_cent, end_cent)]
         # Bias towards oversegmentation by making it impossible to reverse
@@ -770,38 +585,25 @@ class Canvas(object):
         return logits, sel, sel_cent
 
     def segment_at(self, start_pos, id):
-        """Summary.
 
-        Args:
-          start_pos: Start seed position of shape (z, y, x)
-          id: Process id
-        """
         try:
             if not self.is_valid_pos(start_pos, ignore_move_threshold=True):
                 return
-            # if self.segmented_mask[start_pos] != 0:
-                # return
-            # if self.done_mask[start_pos] != 0:
-                # return
-
             self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)
-            step_iters = 0
-
-            # orignal code
-            # self.segmentation = np.zeros(self.shape, dtype=np.int32)
             self.seed = np.zeros(self.shape, dtype=np.float32)
             self.seg_prob = np.zeros(self.shape, dtype=np.uint8)
             self.init_seed(start_pos)
             self.reset_state(start_pos)
 
             if not self.movement_policy:
-                # Add first element with arbitrary priority 1 (it will be
-                # consumed right away anyway).
+                # Add first element with arbitrary priority 1 (it will be consumed
+                # right away anyway).
                 item = (self.movement_policy.score_threshold * 2, start_pos)
                 self.movement_policy.append(item)
 
             sel_i_s = [()]
             sel_cent_s = [()]
+            step_iter = 0
 
             for pos in self.movement_policy:
                 # Terminate early if the seed got too weak.
@@ -811,27 +613,24 @@ class Canvas(object):
 
                 """stepping"""
                 pred, sel_i, sel_cent = self.update_at(pos)
-                step_iters += 1
+                step_iter += 1
 
-                sel_i_s = sel_i                # updated_cube_fov_size
-                sel_cent_s = sel_cent          # center_of_updated_cube
-
-                self._min_pos = np.minimum(self._min_pos, pos)
-                self._max_pos = np.maximum(self._max_pos, pos)
+                sel_i_s = sel_i  # updated_cube_fov_size
+                sel_cent_s = sel_cent  # center_of_updated_cube
 
                 try:
                     mask = self.seed[tuple(sel_i_s)] >= self.seg_thr
                     self.seg_prob_i[tuple(sel_i_s)][mask] = quantize_probability(expit(self.seed[tuple(sel_i_s)][mask]))
                 except RuntimeError:
                     return False
+
                 # save the pred_mask out for each step
                 # skimage.io.imsave('./data/FFN_object1_inf_{}_step{}.tif'.format(id, num_iters), self.seg_prob_i)
 
-                # Update_movable_location
+                """update_movable_location"""
+
                 self.movement_policy.update(pred, pos)
                 assert np.all(pred.shape == self.input_size)
-
-            # Agglomeration code
 
             try:
                 mask = self.seed[tuple(sel_i_s)] >= self.seg_thr
@@ -841,74 +640,16 @@ class Canvas(object):
             mask_seg_prob_i = (self.seg_prob_i >= 128)
             self.done_mask[mask_seg_prob_i] = True
 
-            if np.sum(mask_seg_prob_i) >= 400:
+            if np.sum(mask_seg_prob_i) >= self.vox_thr:
 
-                seg_prob_mask = (self.seg_prob_i > 128)         # pred_mask of current seed
-                num_seg_voxels_current_seed = np.sum(seg_prob_mask)    # num
+                seg_prob_mask = (self.seg_prob_i > 128)  # prediction_mask of current seed
 
-                segmented_mask = (self.segmented_mask != 0)                 # segmented mask form previous seeds
-                overlap_mask = (seg_prob_mask * segmented_mask)             # overlap of this inference run with previous segmented mask
-
-                ids_of_overlap_list, counts_of_id_overlap = np.unique(self.segmented_mask[overlap_mask],return_counts=True)
-                id_overlap_dict = dict(zip(ids_of_overlap_list, counts_of_id_overlap))
-                print(ids_of_overlap_list)
-                print(counts_of_id_overlap)
-
-                merge_list = []
-
-                if len(ids_of_overlap_list) == 0:
-                    self.segmented_mask[seg_prob_mask] = id
-                else:
-                    for id_of_overlap in ids_of_overlap_list:
-
-                        id_mask = (self.segmented_mask == id_of_overlap)  # mask of that specific id
-                        overlapped_id_num = np.sum(id_mask)
-
-                        overlap_voxels = id_overlap_dict[id_of_overlap]
-
-                        ratio1 = overlap_voxels / num_seg_voxels_current_seed  # overlap / seg_mask from current_seed
-                        ratio2 = overlap_voxels / overlapped_id_num            # overlap / previous seg specific id mask
-
-                        print("ratio1_cur_seed", ratio1)
-                        print('ratio2_seg_previous_id', ratio2)
-
-                        if (ratio1 <= 0.2) | (ratio2 <= 0.2):
-                            print("cannot_merge_id", id_of_overlap)
-                        else:
-                            merge_list.append(id_of_overlap)
-                            print("merged_id=", id_of_overlap)
-
-                self.segmented_mask[seg_prob_mask] = id
-                for id_for_merge in merge_list:
-                    id_for_merge_mask = (self.segmented_mask == id_for_merge)
-                    self.segmented_mask[id_for_merge_mask] = id
-
-                # stacked_img = np.stack((self.segmented_mask,) * 3, axis=-1)
-                # stacked_img[tuple(sel_cent_s)] = (250, 0, 0)
-                # sel_i = None
-
-                # make_hue_img_and_save_out
-                ids = np.unique(self.segmented_mask)
-                stacked_img = np.stack((self.segmented_mask,) * 3, axis=-1)
-
-                for id_i in ids:
-                    # print(id_i)
-                    id_mask = (self.segmented_mask == id_i)
-
-                    rad2 = random.randrange(10, 254, 1)
-                    rad3 = random.randrange(10, 254, 1)
-                    rad1 = random.randrange(10, 254, 1)
-                    if id_i == 0:
-                        rad1 = rad2 = rad3 = 0
-                    stacked_img[id_mask] = (rad1, rad2, rad3)
-
-                self.save_count += 1
-                self.save_interval = 100
-
-                if (self.save_count  % self.save_interval) == 0:
-                    skimage.io.imsave(self.data_save_path+'id_{}_{}.tif'.format(id, start_pos), stacked_img.astype('uint8'))
-
-                print("id", id)
+                # save segmentation from each seed
+                id_save = '{}'.format(id)
+                seg_prob_coords = np.argwhere(seg_prob_mask).astype('int16')
+                with h5py.File(self.data_save_path + "seg_of_seeds.h5", 'a') as f:
+                    f.create_dataset(id_save, data=seg_prob_coords, compression='gzip')
+                print("segmentation saved! seed:", id, "coord:", start_pos)
                 return True
             else:
                 print("too small", id)
@@ -916,75 +657,3 @@ class Canvas(object):
         except RuntimeError:
             return False
 
-    def segment_all(self):
-        """Summary."""
-        mbd = np.array([1, 1, 1])
-        iter = 0
-        # print()
-        try:
-            for pos in self.seed_list:
-
-                count = round(1.0 * iter / len(self.seed_list) * 50)
-
-                sys.stdout.write('[ {}/{}: [{}{}]\r'.format(iter + 1, len(self.seed_list),
-                                                            '#' * count, ' ' * (50 - count)))
-                iter += 1
-
-                """根据有效坐标计算slice"""
-                if not self.is_valid_pos(pos, ignore_move_threshold=True):
-                    continue
-
-                low = np.array(pos) - mbd
-                high = np.array(pos) + mbd + 1
-                sel = [slice(s, e) for s, e in zip(low, high)]
-                if np.any(self.segmentation[tuple(sel)] > 0):
-                    self.segmentation[pos] = -1
-                    continue
-
-                seg_start = time.time()
-                """分割当前坐标cube"""
-                num_iters = self.segment_at(pos)
-                t_seg = time.time() - seg_start
-
-                if num_iters <= 0:
-                    continue
-
-                if self.seed[pos] < self.mov_thr:
-                    # Mark this location as excluded.
-                    if self.segmentation[pos] == 0:
-                        self.segmentation[pos] = -1
-                    continue
-
-                """根据seed内容计算最后的分割图"""
-                sel = [slice(max(s, 0), e + 1) for s, e in
-                       zip(self._min_pos - self.input_size // 2, self._max_pos + self.input_size // 2)]
-                mask = self.seed[tuple(sel)] >= self.seg_thr
-                raw_segmented_voxels = np.sum(mask)
-                overlapped_ids, counts = np.unique(self.segmentation[tuple(sel)][mask], return_counts=True)
-                valid = overlapped_ids > 0
-                overlapped_ids = overlapped_ids[valid]
-                counts = counts[valid]
-                mask &= self.segmentation[tuple(sel)] <= 0
-                actual_segmented_voxels = np.sum(mask)
-                if actual_segmented_voxels < 1000:
-                    if self.segmentation[pos] == 0:
-                        self.segmentation[pos] = -1
-                    continue
-
-                """每次不同目标通过id+1实现区分"""
-                self.max_id += 1
-                while self.max_id in self.origins:
-                    self.max_id += 1
-
-                self.segmentation[tuple(sel)][mask] = self.max_id
-                self.seg_prob[tuple(sel)][mask] = quantize_probability(expit(self.seed[tuple(sel)][mask]))
-                self.overlaps[self.max_id] = np.array([overlapped_ids, counts])
-                self.origins[self.max_id] = OriginInfo(pos, num_iters, t_seg)
-                max_value = self.segmentation.max()
-                self.segmentation[self.segmentation == -1] = 0
-                self.segmentation = self.segmentation * (1.0 * 255 / max_value)
-                self.target_dic[self.max_id] = self.segmentation.astype(np.uint8)
-                self.segmentation = np.zeros(self.shape, dtype=np.int32)
-
-        except RuntimeError:
-            return True
