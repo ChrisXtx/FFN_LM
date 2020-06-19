@@ -19,7 +19,7 @@ def swc_fusion(dir_path, save_path):
 
         swc_data[:, 0] += sk_id_cnt
         swc_data[:, 6] += sk_id_cnt
-        swc_fused_data = np.concatenate((swc_data,swc_fused_data))
+        swc_fused_data = np.concatenate((swc_fused_data,swc_data))
 
         print(swc_fused_data.shape)
         sk_id_cnt += num_sk
@@ -30,33 +30,40 @@ def swc_fusion(dir_path, save_path):
             sk_str = '{} {} {:g} {:g} {:g} {:g} {}'.format(
                 sk_point[0],  sk_point[1],  sk_point[2],  sk_point[3],  sk_point[4],  sk_point[5],  sk_point[6])
             swc_fused_file.write(sk_str + '\n')
- 
- 
-def swc_to_inf_seeds(swc, images, swc_scaling, input_size, delta, buffer_dis, inf_seed_display):
+
+
+
+
+
+
+
+
+
+def swc_to_inf_seeds(swc, images_shape, swc_scaling, input_size, delta, buffer_dis, inf_seed_display, seed_save_path):
 
     """
     Finding all the seeds that are ideal for inference from skeleton points
     Avoiding seeds close to overlapping region
-    
-    :param swc: 
-    :param images: 
+
+    :param swc:
+    :param images:
     :param swc_scaling:          original / scaling
     :param input_size:           fov size of model
     :param delta:                delta size of model
     :param buffer_dis:           specify the distance to the overlapping area
     :param inf_seed_display:     inspect seeds locations
-    :return:            
+    :return:
     """
 
     swc_data = np.loadtxt(swc)
-    images_shape = images.shape
+
 
     swc_data = np.round(swc_data)
     sk_num = len(swc_data[:, 5])
 
     cube_size = input_size + 2 * delta
     rad_cube = np.array(cube_size) / 2
-    
+
     inf_seed_dict = {}
     inf_seed_list = []
     for point in range(sk_num - buffer_dis - 1):
@@ -99,8 +106,32 @@ def swc_to_inf_seeds(swc, images, swc_scaling, input_size, delta, buffer_dis, in
         end = start + target_shape
         selector = [slice(s, e) for s, e in zip(start, end)]
         inf_seed_display[tuple(selector)] = 1
-    
+
+    with h5py.File(seed_save_path + 'seeds.h5', 'w') as f:
+
+        f.create_dataset('seeds', data= np.array(inf_seed_list) , compression='gzip')
+        f.create_dataset('inf_seed_display', data=inf_seed_display, compression='gzip')
+
     return inf_seed_dict, inf_seed_list
+
+def run ():
+    # script
+
+    path = '/home/x903102883/2017EXBB/PF_inf/pf/axnol/'
+    swc_fusion(path, path)
+    fused_file_name = (path.split("/"))[-2]
+    swc = path + str(fused_file_name) + "_fused.swc"
+    image_shape = (160, 500, 500)
+    inf_seed_display = np.zeros(image_shape)
+    seed_save = '/home/x903102883/FFN_LM_v0.2/data/agglomeration_net_test/pf_axonal_1/'
+    inf_seed_dict, inf_seed_list = swc_to_inf_seeds(swc, image_shape, 2, (39, 39, 39),
+                                                    (4, 4, 4), 1, inf_seed_display,
+                                                    seed_save)
+if __name__ == '__main__':
+    run()
+
+
+
 
 
 
