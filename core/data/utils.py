@@ -217,7 +217,7 @@ def quantize_probability(prob):
     return ret.astype(np.uint8)
 
 
-def get_scored_move_offsets(deltas, prob_map, threshold=0.8, flex_faces=1):
+def get_scored_move_offsets(deltas, prob_map, threshold=0.8, flex_faces=0):
     """Looks for potential moves for a FFN.
 
     The possible moves are determined by extracting probability map values
@@ -239,7 +239,7 @@ def get_scored_move_offsets(deltas, prob_map, threshold=0.8, flex_faces=1):
       The order of the returned tuples is arbitrary and should not be depended
       upon. In particular, the tuples are not necessarily sorted by score.
     """
-    
+
     flex_deltas = [deltas]
     if flex_faces == 0:
         pass
@@ -250,12 +250,15 @@ def get_scored_move_offsets(deltas, prob_map, threshold=0.8, flex_faces=1):
             if (deltas[0] % flex * 2) != 0:
                 deltas_down = (deltas + (deltas[0] % flex * 2)) / flex * 2
             else:
-                deltas_down = deltas / flex * 2
+                deltas_down = deltas / (flex * 2)
+            deltas_half_up = deltas + deltas_down
             deltas_up = deltas * 2 * flex
             deltas_down = [int(deltas_down[0]), int(deltas_down[1]), int(deltas_down[2])]
             deltas_up = [int(deltas_up[0]), int(deltas_up[1]), int(deltas_up[2])]
+            deltas_half_up = [int(deltas_half_up[0]), int(deltas_half_up[1]), int(deltas_half_up[2])]
             flex_deltas.append(deltas_up)
             flex_deltas.append(deltas_down)
+            flex_deltas.append(deltas_half_up)
 
     for deltas in flex_deltas:
         center = np.array(prob_map.shape) // 2
@@ -409,7 +412,7 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
         self.done_rounded_coords.add(qpos)
 
         scored_coords = get_scored_move_offsets(self.deltas, prob_map,
-                                                threshold=self.score_threshold, flex_faces=1)
+                                                threshold=self.score_threshold, flex_faces=0)
         scored_coords = sorted(scored_coords, reverse=True)
         for score, rel_coord in scored_coords:
             # convert to whole cube coordinates
@@ -419,8 +422,8 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
 
 class Canvas(object):
 
-    def __init__(self, model, images, seed_list, size, delta, seg_thr, mov_thr, act_thr, vox_thr, data_save_path,
-                 save_interval):
+    def __init__(self, model, images, size, delta, seg_thr, mov_thr, act_thr, re_seg_thr ,vox_thr, data_save_path,
+                 save_chunk):
         self.model = model
         self.images = images
         self.shape = images.shape[:-1]
@@ -429,23 +432,23 @@ class Canvas(object):
         self.seg_thr = logit(seg_thr)
         self.mov_thr = logit(mov_thr)
         self.act_thr = logit(act_thr)
+        self.re_seg_thr = re_seg_thr
 
         self.data_save_path = data_save_path
-        self.segmented_mask = np.zeros(self.shape, dtype=np.int32)
-        self.done_mask = np.zeros(self.shape, dtype=bool)
 
+        self.re_seged_count_mask = np.zeros(self.shape, dtype=np.uint8)
         self.segmentation = np.zeros(self.shape, dtype=np.int32)
         self.seed = np.zeros(self.shape, dtype=np.float32)
-        self.seg_prob = np.zeros(self.shape, dtype=np.uint8)
-
         self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)  # temp save out (pred mask) for each step
+
         self.save_count = 0
-        self.save_interval = save_interval
+        self.save_part = 1
+        self.save_chunk = save_chunk
+
         self.vox_thr = vox_thr
         self.target_dic = {}
 
         self.seed_policy = None
-        self.seed_list = seed_list
         self.max_id = 0
         # Maps of segment id -> ..
         self.origins = {}  # seed location
@@ -542,13 +545,14 @@ class Canvas(object):
         off = self.input_size // 2  # zyx
 
         start = np.array(pos) - off
-        start_cent = np.array(pos) - 1
+        #start_cent = np.array(pos) - 1
+
         end = start + self.input_size
-        end_cent = start_cent + 3
-        # print(start_cent)
-        # print(end_cent)
-        start_cent[0] = 0
-        end_cent[0] = 590
+        #end_cent = start_cent + 3
+
+        #start_cent[0] = 0
+        #end_cent[0] = 590
+
         sel = [slice(s, e) for s, e in zip(start, end)]
 
         logit_seed = np.array(self.seed[tuple(sel)])
@@ -563,7 +567,7 @@ class Canvas(object):
 
         """update seed"""
         sel = [slice(s, e) for s, e in zip(start, end)]
-        sel_cent = [slice(s, e) for s, e in zip(start_cent, end_cent)]
+        #sel_cent = [slice(s, e) for s, e in zip(start_cent, end_cent)]
         # Bias towards oversegmentation by making it impossible to reverse
         # disconnectedness predictions in the course of inference.
         th_max = logit(0.5)
@@ -582,16 +586,20 @@ class Canvas(object):
         # Update working space.
         self.seed[tuple(sel)] = logits
 
-        return logits, sel, sel_cent
+        return logits, sel
 
     def segment_at(self, start_pos, id):
 
         try:
             if not self.is_valid_pos(start_pos, ignore_move_threshold=True):
                 return
+            if self.re_seged_count_mask[start_pos] >= self.re_seg_thr:
+                print('skip', id)
+                return
+
+
             self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)
             self.seed = np.zeros(self.shape, dtype=np.float32)
-            self.seg_prob = np.zeros(self.shape, dtype=np.uint8)
             self.init_seed(start_pos)
             self.reset_state(start_pos)
 
@@ -612,20 +620,22 @@ class Canvas(object):
                     break
 
                 """stepping"""
-                pred, sel_i, sel_cent = self.update_at(pos)
+                pred, sel_i = self.update_at(pos)
                 step_iter += 1
 
                 sel_i_s = sel_i  # updated_cube_fov_size
-                sel_cent_s = sel_cent  # center_of_updated_cube
 
+
+                """
                 try:
                     mask = self.seed[tuple(sel_i_s)] >= self.seg_thr
                     self.seg_prob_i[tuple(sel_i_s)][mask] = quantize_probability(expit(self.seed[tuple(sel_i_s)][mask]))
                 except RuntimeError:
                     return False
-
                 # save the pred_mask out for each step
-                # skimage.io.imsave('./data/FFN_object1_inf_{}_step{}.tif'.format(id, num_iters), self.seg_prob_i)
+                skimage.io.imsave('./data/FFN_object1_inf_{}_step{}.tif'.format(id, num_iters), self.seg_prob_i)
+                """
+
 
                 """update_movable_location"""
 
@@ -633,23 +643,24 @@ class Canvas(object):
                 assert np.all(pred.shape == self.input_size)
 
             try:
-                mask = self.seed[tuple(sel_i_s)] >= self.seg_thr
-                self.seg_prob_i[tuple(sel_i_s)][mask] = quantize_probability(expit(self.seed[tuple(sel_i_s)][mask]))
+                mask = (self.seed >= self.seg_thr)
+                self.seg_prob_i[mask] = quantize_probability(expit(self.seed[mask]))
             except RuntimeError:
                 return False
-            mask_seg_prob_i = (self.seg_prob_i >= 128)
-            self.done_mask[mask_seg_prob_i] = True
 
+            mask_seg_prob_i = (self.seg_prob_i >= 128)
             if np.sum(mask_seg_prob_i) >= self.vox_thr:
 
-                seg_prob_mask = (self.seg_prob_i > 128)  # prediction_mask of current seed
-
+                self.re_seged_count_mask[mask_seg_prob_i] += 1
                 # save segmentation from each seed
+                self.save_count += 1
+                if self.save_count % self.save_chunk == 0:
+                    self.save_part += 1
                 id_save = '{}'.format(id)
-                seg_prob_coords = np.argwhere(seg_prob_mask).astype('int16')
-                with h5py.File(self.data_save_path + "seg_of_seeds.h5", 'a') as f:
+                seg_prob_coords = np.argwhere(mask_seg_prob_i).astype('int16')
+                with h5py.File(self.data_save_path + "seg_of_seeds_test_part{}.h5".format(self.save_part), 'a') as f:
                     f.create_dataset(id_save, data=seg_prob_coords, compression='gzip')
-                print("segmentation saved! seed:", id, "coord:", start_pos)
+                print("segmentation saved! seed:", id, "coord:", start_pos,"completed_num:",self.save_count)
                 return True
             else:
                 print("too small", id)
