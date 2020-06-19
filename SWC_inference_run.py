@@ -65,13 +65,12 @@ def run():
 
     # run inference on every seed and save their segmentation
 
-    resume_cnt = 0
+    
     inf_cnt = 0
     for seed_id in inf_seed_dict.keys():
         inf_cnt += 1
-        if inf_cnt < resume_cnt:
-            continue
-
+        if inf_cnt < args.resume_seed:
+          continue
         coord = inf_seed_dict[seed_id]
 
         if canvas_inf.segment_at(coord, seed_id):
