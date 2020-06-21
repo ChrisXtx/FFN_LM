@@ -21,6 +21,8 @@ import skimage
 from scipy.stats import stats
 import os
 import h5py
+import threading
+import inference_run
 
 MAX_SELF_CONSISTENT_ITERS = 32
 HALT_SILENT = 0
@@ -29,6 +31,13 @@ HALT_VERBOSE = 2
 
 OriginInfo = namedtuple('OriginInfo', ['start_zyx', 'iters', 'walltime_sec'])
 HaltInfo = namedtuple('HaltInfo', ['is_halt', 'extra_fetches'])
+
+# multithreads communication
+save_count = 1
+re_seged_count_mask = np.zeros(inference_run.images.shape[:-1], dtype = np.uint8)
+save_chunk = inference_run.args.save_chunk
+resume_seed = inference_run.args.resume_seed
+save_part = 1 + int(resume_seed/save_chunk)
 
 
 def sigmoid(x):
@@ -219,7 +228,7 @@ def quantize_probability(prob):
     return ret.astype(np.uint8)
 
 
-def get_scored_move_offsets(deltas, prob_map, threshold=0.8, flex_faces=0):
+def get_scored_move_offsets(deltas, prob_map, threshold=0.8, flex_faces=1):
     """Looks for potential moves for a FFN.
 
     The possible moves are determined by extracting probability map values
@@ -414,7 +423,7 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
         self.done_rounded_coords.add(qpos)
 
         scored_coords = get_scored_move_offsets(self.deltas, prob_map,
-                                                threshold=self.score_threshold, flex_faces=0)
+                                                threshold=self.score_threshold, flex_faces=1)
         scored_coords = sorted(scored_coords, reverse=True)
         for score, rel_coord in scored_coords:
             # convert to whole cube coordinates
@@ -424,8 +433,10 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
 
 class Canvas(object):
 
+
     def __init__(self, model, images, size, delta, seg_thr, mov_thr, act_thr, re_seg_thr, vox_thr, data_save_path,
-                 save_chunk, resume_seed):
+                 process_id):
+        self.process_id = process_id
         self.model = model
         self.images = images
         self.shape = images.shape[:-1]
@@ -435,17 +446,12 @@ class Canvas(object):
         self.mov_thr = logit(mov_thr)
         self.act_thr = logit(act_thr)
         self.re_seg_thr = re_seg_thr
-        self.resume_seed = resume_seed
+
         self.data_save_path = data_save_path
 
-        self.re_seged_count_mask = np.zeros(self.shape, dtype=np.uint8)
-        self.segmentation = np.zeros(self.shape, dtype=np.int32)
         self.seed = np.zeros(self.shape, dtype=np.float32)
         self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)  # temp save out (pred mask) for each step
 
-        self.save_count = 0
-        self.save_chunk = save_chunk
-        self.save_part = 1 + int(self.resume_seed / self.save_chunk)
 
         self.vox_thr = vox_thr
         self.target_dic = {}
@@ -591,13 +597,24 @@ class Canvas(object):
         return logits, sel
 
     def segment_at(self, start_pos, id, tag):
+        t_lock = threading.Lock()
+
+        # multi-threads
+        global save_count
+        global re_seged_count_mask
+        global save_chunk
+        global resume_seed
+        global save_part
 
         try:
             if not self.is_valid_pos(start_pos, ignore_move_threshold=True):
                 return
-            if self.re_seged_count_mask[start_pos] >= self.re_seg_thr:
+
+
+            if re_seged_count_mask[start_pos] >= self.re_seg_thr:
                 print('skip', id)
                 return
+
 
             self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)
             self.seed = np.zeros(self.shape, dtype=np.float32)
@@ -650,16 +667,25 @@ class Canvas(object):
             mask_seg_prob_i = (self.seg_prob_i >= 128)
             if np.sum(mask_seg_prob_i) >= self.vox_thr:
 
-                self.re_seged_count_mask[mask_seg_prob_i] += 1
+
+                re_seged_count_mask[mask_seg_prob_i] += 1
+
+
                 # save segmentation from each seed
-                self.save_count += 1
-                if self.save_count % self.save_chunk == 0:
-                    self.save_part += 1
-                id_save = '{}'.format(id)
                 seg_prob_coords = np.argwhere(mask_seg_prob_i).astype('int16')
-                with h5py.File(self.data_save_path + tag + "seg_of_seeds_test_part{}.h5".format(self.save_part), 'a') as f:
+
+                t_lock.acquire()
+                save_count += 1
+                print('save_count', save_count, "process id", self.process_id)
+                if save_count % save_chunk == 0:
+                    save_part += 1
+                id_save = '{}'.format(id)
+                print("segmentation saved! seed:", id, "coord:", start_pos, "completed_num:", save_count)
+                with h5py.File(self.data_save_path + tag + "seg_of_seeds_test_part{}.h5".format(save_part), 'a') as f:
                     f.create_dataset(id_save, data=seg_prob_coords, compression='gzip')
-                print("segmentation saved! seed:", id, "coord:", start_pos, "completed_num:", self.save_count)
+                t_lock.release()
+
+
                 return True
             else:
                 print("too small", id)
