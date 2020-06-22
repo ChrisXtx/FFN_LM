@@ -1,5 +1,4 @@
-from knossos_utils import knossosdataset
-from knossos_utils import skeleton
+
 import h5py
 import numpy as np
 import tifffile
