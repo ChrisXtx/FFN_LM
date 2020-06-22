@@ -1,14 +1,13 @@
 
 import h5py
 import numpy as np
-import tifffile
+
 from pathlib import Path
 import natsort
 import skimage
 import argparse
 from scipy import ndimage
-import gc
-import cv2
+
 
 def z_resize_no_inter(data,factor):
     resized = skimage.transform.resize(data,
@@ -30,7 +29,7 @@ def sort_files(dir_path):
     sorted_files = natsort.natsorted(files, reverse=False)
     return sorted_files
 
-
+"""
 def increase_contrast(image):
     """Uses CLAHE (Contrast Limited Adaptive Histogram Equalization) to increase
     the contrast of an image. Found on Stack Overflow, written by Jeru Luke."""
@@ -85,3 +84,4 @@ def calhe_3d(image):
         stack = np.concatenate((stack,slice_out),axis= 0)
         print(stack.shape)
     return stack
+"""
