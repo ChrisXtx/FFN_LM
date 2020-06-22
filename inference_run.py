@@ -75,7 +75,7 @@ def canvas_init(process_id):
 def run (canvas_inf, inf_seed_dict, process_id, process_num):
 
     # run inference on every seed and save their segmentation
-    starttime = time.time()
+   
 
     # individualize the dict
     ps_spe = 'inf_seed_dict' + str(process_id)
@@ -93,7 +93,7 @@ def run (canvas_inf, inf_seed_dict, process_id, process_num):
             continue
 
         if canvas_inf.segment_at(coord, seed_id, args.tag):
-            print("run time", time.time() -starttime, "process",process_id )
+            
             continue
 
 
