@@ -24,10 +24,9 @@ parser.add_argument('--data_save', type=str,
 parser.add_argument('--threads', type=int, default=1, help='tag the files')
 
 parser.add_argument('--save_chunk', type=int, default=5000, help='separate the seg_coords from seeds by chunk')
-parser.add_argument('--buffer_distance', type=int, default=0, help='swc_skeletons_dis_from_overlap')
+
 parser.add_argument('--delta', default=(4, 4, 4), help='delta offset')
 parser.add_argument('--input_size', default=(39, 39, 39), help='input size')
-parser.add_argument('--swc_scaling', type=int, default=2, help='swc_scaling')
 parser.add_argument('--depth', type=int, default=26, help='depth of ffn')
 parser.add_argument('--seg_thr', type=float, default=0.6, help='input size')
 parser.add_argument('--mov_thr', type=float, default=0.8, help='movable thr')
