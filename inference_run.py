@@ -33,7 +33,7 @@ parser.add_argument('--mov_thr', type=float, default=0.8, help='movable thr')
 parser.add_argument('--act_thr', type=float, default=0.8, help='activation of seg')
 parser.add_argument('--re_seg_thr', type=int, default=1, help='will not seed here if segmented many times')
 parser.add_argument('--vox_thr', type=int, default=500, help='remove if too small')
-parser.add_argument('--resume_seed', type=int, default=37550, help='resume_seed')
+parser.add_argument('--resume_seed', type=int, default=94281, help='resume_seed')
 parser.add_argument('--tag', type=str, default='whole_par4', help='tag the files')
 
 

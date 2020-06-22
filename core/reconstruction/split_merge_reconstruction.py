@@ -30,17 +30,22 @@ def convert_coor_all(segs_path):
     :param segs_path: h5 file of coors
     :return:
     """
-    with h5py.File(segs_path, 'r') as segs:
-        ids = list(segs.keys())
 
-        for id in ids:
-            coors = segs[id][()]
-            codes = coor_to_code(coors)
-            with h5py.File(segs_path[:-3] + "_code.h5", 'a') as f:
-                f.create_dataset(id, data=codes, compression='gzip')
+    segs_files = sort_files(segs_path)
+    code_dict = {}
+    for segs_file in segs_files:
+        with h5py.File(segs_path + segs_file, 'r') as segs:
+            ids = list(segs.keys())
+
+            for id in ids:
+                coors = segs[id][()]
+                codes = coor_to_code(coors)
+                code_dict[id] = codes
+
+    return code_dict
 
 
-def merge(segs_path, codes_path, ratio_thr):
+def merge(segs_path, segs_code_dict, ratio_thr):
     """
     merge two segs from two seeds if they have enough overlaps
     :param codes_path:
@@ -48,37 +53,38 @@ def merge(segs_path, codes_path, ratio_thr):
     :return: merge_dict {id : set( merge_id ) }
     """
 
-    segs_dict = {}
-    with h5py.File(codes_path, 'r') as codes:
-        ids = list(codes.keys())
-        for id in ids:
-            code = codes[id][()]
-            segs_dict[id] = code
 
     span_dict = {}
-    with h5py.File(segs_path, 'r') as segs:
-        ids = list(segs.keys())
-        for id in ids:
-            seg = segs[id][()]
-            seg_span = [np.amin(seg, axis=0), np.amax(seg, axis=0)]
-            span_dict[id] = seg_span
+    segs_files = sort_files(segs_path)
+
+    for segs_file in segs_files:
+        if 'part' not in segs_file:
+            continue
+        with h5py.File(segs_path + segs_file, 'r') as segs:
+            ids = list(segs.keys())
+            for id in ids:
+                seg = segs[str(id)][()]
+                seg_span = [np.amin(seg, axis=0), np.amax(seg, axis=0)]
+                span_dict[id] = seg_span
+
 
     merge_dict = {}
-    for id in segs_dict.keys():
-
-        seg_codes = segs_dict[id]
+    for id in segs_code_dict.keys():
+        print("merge_check", id)
+        seg_codes = segs_code_dict[id]
         seg_span = span_dict[id]
+
         id_seg_voxels = len(seg_codes)
 
         merge_dict[int(float(id))] = set()
-        for id_merge_exam in segs_dict.keys():
+        for id_merge_exam in segs_code_dict.keys():
 
             # check if it was possible for them to overlap
             id_merge_exam_span = span_dict[id_merge_exam]
             if not span_overlap_check(seg_span, id_merge_exam_span):
                 continue
 
-            seg_codes_merge_exam = segs_dict[id_merge_exam]
+            seg_codes_merge_exam = segs_code_dict[id_merge_exam]
             id__merge_exam_seg_voxels = len(seg_codes_merge_exam)
 
             overlap_voxels = len(np.intersect1d(seg_codes_merge_exam, seg_codes))
@@ -87,7 +93,7 @@ def merge(segs_path, codes_path, ratio_thr):
             ratio_merge_exam = overlap_voxels / id__merge_exam_seg_voxels  # overlap / merge_exam_target_segmentation
 
             if (ratio_self <= ratio_thr) | (ratio_merge_exam <= ratio_thr):
-                print("cannot_merge_id", id_merge_exam)
+                continue
             else:
                 merge_dict[int(float(id))].add(int(float(id_merge_exam)))
 
@@ -134,7 +140,6 @@ def merge_segs(merge_dict):
             continue
         merge_group = []
         merge_group = recur_merge_link(id, merge_dict, merge_group, done_list)
-        print(merge_group)
         obj += 1
         merge_group_dict[obj] = merge_group
 
@@ -184,54 +189,65 @@ def segs_reconstructor(segs_path, merge_group_dict, image_shape, cons_thr=1):
     :return:
     """
     segmentation = np.zeros(image_shape, dtype='uint8')
-    with h5py.File(segs_path, 'r') as segs:
 
-        ids = list(segs.keys())
-        num_group = len(merge_group_dict)
+    segs_dict = {}
+    segs_files = sort_files(segs_path)
 
-        for obj in merge_group_dict.keys():
-            consensus = np.zeros(image_shape, dtype='uint8')
+    for segs_file in segs_files:
+        if 'part' not in segs_file:
+            continue
+        with h5py.File(segs_path + segs_file, 'r') as segs:
+            ids = list(segs.keys())
+            for id in ids:
+                coors = segs[str(id)][()]
+                segs_dict[id] = coors
 
+
+    num_group = len(merge_group_dict)
+    for obj in merge_group_dict.keys():
+        print("reonstruct", obj)
+        #consensus = np.zeros(image_shape, dtype='uint8')
+        for id in merge_group_dict[obj]:
+
+            coors = segs_dict[str(id)]
+            id_seg_mask = coors_to_mask(coors, image_shape)
+            segmentation[id_seg_mask] = obj
+            #consensus[id_seg_mask] += 1
+        """
+        # over segmentation split
+        if cons_thr > 1:
+            consensus_fail = (consensus < cons_thr)
+            # clear the  consensus failed region
+            segmentation[consensus_fail] = 0
+            # over segmentation
             for id in merge_group_dict[obj]:
-
-                coors = segs[str(float(id))][()]
+                coors = segs_dict[str(id)]
                 id_seg_mask = coors_to_mask(coors, image_shape)
-                segmentation[id_seg_mask] = obj
-                consensus[id_seg_mask] += 1
-
-            # over segmentation split
-            if cons_thr > 1:
-                consensus_fail = (consensus < cons_thr)
-                # clear the  consensus failed region
-                segmentation[consensus_fail] = 0
-                # over segmentation
-                for id in merge_group_dict[obj]:
-                    coors = segs[str(float(id))][()]
-                    id_seg_mask = coors_to_mask(coors, image_shape)
-                    split_mask = (consensus_fail * id_seg_mask)
-                    segmentation[split_mask] = num_group + id
-
+                split_mask = (consensus_fail * id_seg_mask)
+                segmentation[split_mask] = num_group + id
+        """
     return segmentation
 
-# example script
 
-"""
+segs_path_test = '/home/x903102883/2017EXBB/whole_volume_inf/part4/test/'
 
-path =  # path
-segs_path_test = path + 'seg_of_seeds_test_part1.h5'
-codes_path_test = path + 'seg_of_seeds_test_part1_code.h5'
-merge_dict_save_path_test = path
-merge_dict_path_test = path + 'merge_dict.pkl'
+merge_dict_save_path_test = segs_path_test
+merge_dict_path_test = segs_path_test + 'merge_dict.pkl'
 
-convert_coor_all(segs_path_test)
-merge_dict = merge(segs_path_test, codes_path_test, 0.20)
+segs_code_dict = convert_coor_all(segs_path_test)
+merge_dict = merge(segs_path_test, segs_code_dict, 0.20)
+print(len(merge_dict))
+
+
 pickle_obj(merge_dict, 'merge_dict', merge_dict_save_path_test)
 merge_dict_test = load_obj(merge_dict_path_test)
-print(merge_dict_test)
+
+
+
 
 merge_group_dict_test = merge_segs(merge_dict_test)
 
-image_shape = # image_shape
+image_shape = (160, 500, 1887)
 
 segmentation = segs_reconstructor(segs_path_test, merge_group_dict_test, image_shape, cons_thr=1)
 RGB_img = segs_to_RGB(segmentation)
@@ -239,5 +255,4 @@ RGB_img = segs_to_RGB(segmentation)
 save_path = merge_dict_save_path_test + 'test.tif'
 skimage.io.imsave(save_path, RGB_img.astype('uint8'))
 
-"""
 
