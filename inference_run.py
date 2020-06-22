@@ -9,18 +9,19 @@ import threading
 
 parser = argparse.ArgumentParser(description='inference script')
 parser.add_argument('--data', type=str,
-                    default='/home/x903102883/2017EXBB/whole_volume_inf/Fused-RGB_down2.tif',
+                    default='/home/xiaotx/2017EXBB/inf_whole/Fused_RGB_down_2.tif',
                     help='input images')
 parser.add_argument('--seed', type=str,
-                    default='/home/x903102883/2017EXBB/whole_volume_inf/part4/whole_part4_seeds.h5',
+                    default='/home/xiaotx/2017EXBB/inf_whole/part5/part5_seeds.h5',
                     help='swc_skeletons')
 parser.add_argument('--model', type=str,
-                    default='/home/x903102883/2017EXBB/whole_volume_inf/down_2_adamffn_model_fov_39_delta_4_depth_26_recall87.6557408472302.pth',
+                    default='/home/xiaotx/2017EXBB/inf_whole/down_2_adamffn_model_fov:39_delta:4_depth:26_recall84.84065095778945.pth',
                     help='path to ffn model')
-
 parser.add_argument('--data_save', type=str,
-                    default='/home/x903102883/2017EXBB/whole_volume_inf/part4/',
+                    default='/home/xiaotx/2017EXBB/inf_whole/part5',
                     help='swc_skeletons')
+
+parser.add_argument('--threads', type=int, default=1, help='tag the files')
 
 parser.add_argument('--save_chunk', type=int, default=5000, help='separate the seg_coords from seeds by chunk')
 parser.add_argument('--buffer_distance', type=int, default=0, help='swc_skeletons_dis_from_overlap')
@@ -102,9 +103,9 @@ def run (canvas_inf, inf_seed_dict, process_id, process_num):
 
 if __name__ == '__main__':
     # multiprocess code
-    # 1 thread  18  51s
+   
 
-    threads = 3
+    threads = args.threads
 
     for thread in range(threads):
         canvas_inf, inf_seed_dict = canvas_init(thread)
