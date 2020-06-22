@@ -33,11 +33,13 @@ OriginInfo = namedtuple('OriginInfo', ['start_zyx', 'iters', 'walltime_sec'])
 HaltInfo = namedtuple('HaltInfo', ['is_halt', 'extra_fetches'])
 
 # multithreads communication
+
 save_count = 1
 re_seged_count_mask = np.zeros(inference_run.images.shape[:-1], dtype = np.uint8)
 save_chunk = inference_run.args.save_chunk
 resume_seed = inference_run.args.resume_seed
 save_part = 1 + int(resume_seed/save_chunk)
+images = inference_run.images
 
 
 def sigmoid(x):
@@ -434,11 +436,14 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
 class Canvas(object):
 
 
-    def __init__(self, model, images, size, delta, seg_thr, mov_thr, act_thr, re_seg_thr, vox_thr, data_save_path,
+
+    def __init__(self, model, size, delta, seg_thr, mov_thr, act_thr, re_seg_thr, vox_thr, data_save_path,
                  process_id):
+
+
         self.process_id = process_id
         self.model = model
-        self.images = images
+
         self.shape = images.shape[:-1]
         self.input_size = np.array(size)
         self.margin = np.array(size) // 2
@@ -519,6 +524,7 @@ class Canvas(object):
     def predict(self, pos):
         """Runs a single step of FFN prediction.
         """
+        global images
         # Top-left corner of the FoV.
         start = np.array(pos) - self.margin
         end = start + self.input_size
@@ -526,17 +532,20 @@ class Canvas(object):
         assert np.all(start >= 0)
 
         # selector = [slice(s, e) for s, e in zip(start, end)]
-        images = self.images[start[0]:end[0], start[1]:end[1], start[2]:end[2], :].transpose(3, 0, 1, 2)
+
+        images_pred = images[start[0]:end[0], start[1]:end[1], start[2]:end[2], :]
+        images_pred = images_pred.transpose(3, 0, 1, 2)
+
         seeds = self.seed[start[0]:end[0], start[1]:end[1], start[2]:end[2]].copy()
         init_prediction = np.isnan(seeds)
         seeds[init_prediction] = np.float32(logit(0.05))
-        images = torch.from_numpy(images).float().unsqueeze(0)
+        images_pred = torch.from_numpy(images_pred).float().unsqueeze(0)
         seeds = torch.from_numpy(seeds).float().unsqueeze(0).unsqueeze(0)
 
         # slice = seeds[:, :, seeds.shape[2] // 2, :, :].sigmoid()
         # seeds[:, :, seeds.shape[2] // 2, :, :] = slice
 
-        input_data = torch.cat([images, seeds], dim=1)
+        input_data = torch.cat([images_pred, seeds], dim=1)
         input_data = Variable(input_data.cuda())
 
         logits = self.model(input_data)
@@ -681,8 +690,11 @@ class Canvas(object):
                     save_part += 1
                 id_save = '{}'.format(id)
                 print("segmentation saved! seed:", id, "coord:", start_pos, "completed_num:", save_count)
-                with h5py.File(self.data_save_path + tag + "seg_of_seeds_test_part{}.h5".format(save_part), 'a') as f:
-                    f.create_dataset(id_save, data=seg_prob_coords, compression='gzip')
+                try:
+                    with h5py.File(self.data_save_path + tag + "seg_of_seeds_test_part{}.h5".format(save_part), 'a') as f:
+                        f.create_dataset(id_save, data=seg_prob_coords, compression='gzip')
+                except OSError:
+                    return True
                 t_lock.release()
 
 

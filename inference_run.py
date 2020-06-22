@@ -15,7 +15,7 @@ parser.add_argument('--seed', type=str,
                     default='/home/x903102883/2017EXBB/whole_volume_inf/part4/whole_part4_seeds.h5',
                     help='swc_skeletons')
 parser.add_argument('--model', type=str,
-                    default='/home/x903102883/2017EXBB/whole_volume_inf/down_2_adamffn_model_fov_39_delta_4_depth_26_recall80.51536447567865.pth.part',
+                    default='/home/x903102883/2017EXBB/whole_volume_inf/down_2_adamffn_model_fov_39_delta_4_depth_26_recall87.6557408472302.pth',
                     help='path to ffn model')
 
 parser.add_argument('--data_save', type=str,
@@ -33,7 +33,7 @@ parser.add_argument('--mov_thr', type=float, default=0.8, help='movable thr')
 parser.add_argument('--act_thr', type=float, default=0.8, help='activation of seg')
 parser.add_argument('--re_seg_thr', type=int, default=1, help='will not seed here if segmented many times')
 parser.add_argument('--vox_thr', type=int, default=500, help='remove if too small')
-parser.add_argument('--resume_seed', type=int, default=15000, help='resume_seed')
+parser.add_argument('--resume_seed', type=int, default=37550, help='resume_seed')
 parser.add_argument('--tag', type=str, default='whole_par4', help='tag the files')
 
 
@@ -50,14 +50,14 @@ else:
 
 
 
-def canvas_init(process_id,images):
+def canvas_init(process_id):
     model = FFN(in_channels=4, out_channels=1, input_size=args.input_size, delta=args.delta, depth=args.depth).cuda()
     assert os.path.isfile(args.model)
     model.load_state_dict(torch.load(args.model))
     model.eval()
 
 
-    canvas_inf = Canvas(model, images, args.input_size, args.delta, args.seg_thr, args.mov_thr,
+    canvas_inf = Canvas(model, args.input_size, args.delta, args.seg_thr, args.mov_thr,
                         args.act_thr, args.re_seg_thr, args.vox_thr, args.data_save, process_id)
     inf_seed_dict = {}
     with h5py.File(args.seed, 'r') as segs:
@@ -104,9 +104,9 @@ if __name__ == '__main__':
     # multiprocess code
     # 1 thread  18  51s
 
-    threads = 1
+    threads = 3
 
     for thread in range(threads):
-        canvas_inf, inf_seed_dict = canvas_init(thread, images)
+        canvas_inf, inf_seed_dict = canvas_init(thread)
         convas_thread = threading.Thread(target=run, args=(canvas_inf, inf_seed_dict, thread, threads))  # main process
         convas_thread.start()
