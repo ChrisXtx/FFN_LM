@@ -685,10 +685,15 @@ class Canvas(object):
 
                 t_lock.acquire()
                 save_count += 1
-                print('save_count', save_count, "process id", self.process_id)
-                if save_count % save_chunk == 0:
-                    save_part += 1
                 id_save = '{}'.format(id)
+                print('save_count', save_count, "process id", self.process_id)
+                
+                if save_count % save_chunk == 0:
+                    with h5py.File(self.data_save_path + tag + "milestone_id{}_part{}.h5".format(id_save, save_part), 'a') as f:
+                        f.create_dataset(id_save, data=seg_prob_coords, compression='gzip')
+                    save_part += 1
+                
+                
                 print("segmentation saved! seed:", id, "coord:", start_pos, "completed_num:", save_count)
                 try:
                     with h5py.File(self.data_save_path + tag + "seg_of_seeds_test_part{}.h5".format(save_part), 'a') as f:
