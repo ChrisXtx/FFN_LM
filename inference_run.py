@@ -18,7 +18,7 @@ parser.add_argument('--model', type=str,
                     default='/home/xiaotx/2017EXBB/inf_whole/down_2_adamffn_model_fov:39_delta:4_depth:26_recall84.84065095778945.pth',
                     help='path to ffn model')
 parser.add_argument('--data_save', type=str,
-                    default='/home/xiaotx/2017EXBB/inf_whole/part5',
+                    default='/home/xiaotx/2017EXBB/inf_whole/part5/',
                     help='swc_skeletons')
 
 parser.add_argument('--threads', type=int, default=1, help='tag the files')
