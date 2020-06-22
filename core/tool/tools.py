@@ -31,8 +31,8 @@ def sort_files(dir_path):
 
 """
 def increase_contrast(image):
-    """Uses CLAHE (Contrast Limited Adaptive Histogram Equalization) to increase
-    the contrast of an image. Found on Stack Overflow, written by Jeru Luke."""
+    #Uses CLAHE (Contrast Limited Adaptive Histogram Equalization) to increase
+    #the contrast of an image. Found on Stack Overflow, written by Jeru Luke.
 
     # Converting image to LAB Color model
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
