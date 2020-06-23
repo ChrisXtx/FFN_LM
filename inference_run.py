@@ -10,13 +10,13 @@ import random
 
 parser = argparse.ArgumentParser(description='inference script')
 parser.add_argument('--data', type=str,
-                    default='//home/x903102883/2017EXBB/whole_volume_inf/Fused-RGB_down2.tif',
+                    default='/home/xiaotx/2017EXBB/inf_whole/Fused_RGB_down_2.tif',
                     help='input images')
 parser.add_argument('--seed', type=str,
                     default='/home/x903102883/2017EXBB/whole_volume_inf/part4/whole_part4_seeds.h5',
                     help='swc_skeletons')
 parser.add_argument('--model', type=str,
-                    default='/home/x903102883/2017EXBB/whole_volume_inf/down_2_adamffn_model_fov_39_delta_4_depth_26_recall87.6557408472302.pth',
+                    default='/home/xiaotx/2017EXBB/inf_whole/down_2_adamffn_model_fov:39_delta:4_depth:26_recall84.84065095778945.pth',
                     help='path to ffn model')
 
 parser.add_argument('--data_save', type=str,
@@ -25,17 +25,15 @@ parser.add_argument('--data_save', type=str,
 
 parser.add_argument('--threads', type=int, default=1, help='tag the files')
 parser.add_argument('--save_chunk', type=int, default=5000, help='separate the seg_coords from seeds by chunk')
-parser.add_argument('--buffer_distance', type=int, default=0, help='swc_skeletons_dis_from_overlap')
 parser.add_argument('--delta', default=(4, 4, 4), help='delta offset')
 parser.add_argument('--input_size', default=(39, 39, 39), help='input size')
-parser.add_argument('--swc_scaling', type=int, default=2, help='swc_scaling')
 parser.add_argument('--depth', type=int, default=26, help='depth of ffn')
 parser.add_argument('--seg_thr', type=float, default=0.6, help='input size')
 parser.add_argument('--mov_thr', type=float, default=0.8, help='movable thr')
 parser.add_argument('--act_thr', type=float, default=0.8, help='activation of seg')
-parser.add_argument('--re_seg_thr', type=int, default=2, help='will not seed here if segmented many times')
+parser.add_argument('--re_seg_thr', type=int, default=3, help='will not seed here if segmented many times')
 parser.add_argument('--vox_thr', type=int, default=500, help='remove if too small')
-parser.add_argument('--resume_seed', type=int, default=94409, help='resume_seed')
+parser.add_argument('--resume_seed', type=int, default=0, help='resume_seed')
 parser.add_argument('--tag', type=str, default='whole_par4', help='tag the files')
 
 args = parser.parse_args()
