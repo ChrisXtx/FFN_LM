@@ -10,13 +10,13 @@ import random
 
 parser = argparse.ArgumentParser(description='inference script')
 parser.add_argument('--data', type=str,
-                    default='/home/xiaotx/2017EXBB/inf_whole/Fused_RGB_down_2.tif',
+                    default='//home/x903102883/2017EXBB/whole_volume_inf/Fused-RGB_down2.tif',
                     help='input images')
 parser.add_argument('--seed', type=str,
                     default='/home/x903102883/2017EXBB/whole_volume_inf/part4/whole_part4_seeds.h5',
                     help='swc_skeletons')
 parser.add_argument('--model', type=str,
-                    default='/home/xiaotx/2017EXBB/inf_whole/down_2_adamffn_model_fov:39_delta:4_depth:26_recall84.84065095778945.pth',
+                    default='/home/x903102883/2017EXBB/whole_volume_inf/down_2_adamffn_model_fov_39_delta_4_depth_26_recall87.6557408472302.pth',
                     help='path to ffn model')
 
 parser.add_argument('--data_save', type=str,
@@ -56,15 +56,23 @@ if files_num > 1:
     for file_index in range(files_num):
         if 'seg_of_seeds' not in segs_saved_files[files_num]:
             files_num -= 1
-
+            if files_num == 0:
+                args.resume_seed = 0
+                break
             continue
         resume_segs_file = segs_saved_files[files_num]
+        with h5py.File(args.data_save + resume_segs_file, 'r') as segs:
+            ids = list(segs.keys())
+            sorted_ids = natsort.natsorted(ids, reverse=False)
+            resume_seed = int(sorted_ids[len(sorted_ids) - 1])
+        args.resume_seed = resume_seed
+        break
 
-    with h5py.File(args.data_save + resume_segs_file, 'r') as segs:
-        ids = list(segs.keys())
-        sorted_ids = natsort.natsorted(ids, reverse=False)
-        resume_seed = int(sorted_ids[len(sorted_ids)-1])
-    args.resume_seed = resume_seed
+if os.path.exists(args.data_save + 're_seged_count_mask.tif'):
+    re_seged_count_mask = skimage.io.imread(args.data_save + 're_seged_count_mask.tif')
+else:
+    re_seged_count_mask = np.zeros(images.shape[:-1], dtype=np.uint8)
+
 
 
 def canvas_init(process_id):
@@ -98,8 +106,11 @@ def run (canvas_inf, inf_seed_dict, process_id, process_num):
     ps_spe = 'inf_seed_dict' + str(process_id)
     multi_th_inf_seed_dict = {}
     multi_th_inf_seed_dict[ps_spe] = inf_seed_dict
-
-    for seed_id in multi_th_inf_seed_dict[ps_spe].keys():
+    seeds = multi_th_inf_seed_dict[ps_spe].keys()
+    for seed_id in seeds :
+        if seed_id == list(seeds)[-1]:
+            skimage.io.imsave(args.data_save + 'finished_tif', np.zeros((8, 8, 8)).astype('uint8'))
+            break
         if not seed_id % process_num == process_id:
             continue
         if seed_id < args.resume_seed:
@@ -108,9 +119,7 @@ def run (canvas_inf, inf_seed_dict, process_id, process_num):
         coord = tuple(coord)
         if coord[1] < 10 | coord[1] > 120:
             continue
-
         if canvas_inf.segment_at(coord, seed_id, args.tag):
-            
             continue
 
 

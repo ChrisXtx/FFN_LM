@@ -35,11 +35,12 @@ HaltInfo = namedtuple('HaltInfo', ['is_halt', 'extra_fetches'])
 # multithreads communication
 
 save_count = 1
-re_seged_count_mask = np.zeros(inference_run.images.shape[:-1], dtype = np.uint8)
+re_seged_count_mask = inference_run.re_seged_count_mask
 save_chunk = inference_run.args.save_chunk
 resume_seed = inference_run.args.resume_seed
 save_part = 1 + int(resume_seed/save_chunk)
 images = inference_run.images
+
 
 
 def sigmoid(x):
@@ -689,9 +690,8 @@ class Canvas(object):
                 print('save_count', save_count, "process id", self.process_id)
                 
                 if save_count % save_chunk == 0:
-                    
+                    skimage.io.imsave(inference_run.args.data_save + 're_seged_count_mask.tif', re_seged_count_mask.astype('uint8'))
                     save_part += 1
-                
                 
                 print("segmentation saved! seed:", id, "coord:", start_pos, "completed_num:", save_count)
                 try:
