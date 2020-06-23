@@ -2,8 +2,6 @@
 import os
 import h5py
 import argparse
-
-from core.data.utils import *
 import pickle
 from core.tool.tools import *
 
