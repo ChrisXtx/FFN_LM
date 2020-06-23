@@ -689,8 +689,7 @@ class Canvas(object):
                 print('save_count', save_count, "process id", self.process_id)
                 
                 if save_count % save_chunk == 0:
-                    with h5py.File(self.data_save_path + tag + "milestone_id{}_part{}.h5".format(id_save, save_part), 'a') as f:
-                        f.create_dataset(id_save, data=seg_prob_coords, compression='gzip')
+                    
                     save_part += 1
                 
                 
