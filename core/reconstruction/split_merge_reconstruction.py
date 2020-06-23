@@ -229,21 +229,18 @@ def segs_reconstructor(segs_path, merge_group_dict, image_shape, cons_thr=1):
     return segmentation
 
 
-segs_path_test = '/home/x903102883/2017EXBB/whole_volume_inf/part4/test/'
+segs_path_test = '/home/xiaotx/2017EXBB/inf_whole/part5/'
 
 merge_dict_save_path_test = segs_path_test
 merge_dict_path_test = segs_path_test + 'merge_dict.pkl'
 
-# segs_code_dict = convert_coor_all(segs_path_test)
-# merge_dict = merge(segs_path_test, segs_code_dict, 0.20)
-# print(len(merge_dict))
-#pa
-# pickle_obj(merge_dict, 'merge_dict', merge_dict_save_path_test)
+segs_code_dict = convert_coor_all(segs_path_test)
+merge_dict = merge(segs_path_test, segs_code_dict, 0.20)
+print(len(merge_dict))
 
 
+pickle_obj(merge_dict, 'merge_dict', merge_dict_save_path_test)
 merge_dict_test = load_obj(merge_dict_path_test)
-
-
 
 
 merge_group_dict_test = merge_segs(merge_dict_test)
@@ -253,7 +250,7 @@ image_shape = (160, 5000, 1887)
 segmentation = segs_reconstructor(segs_path_test, merge_group_dict_test, image_shape, cons_thr=1)
 RGB_img = segs_to_RGB(segmentation)
 
-save_path = merge_dict_save_path_test + 'test.tif'
+save_path = merge_dict_save_path_test + 'test_part5.tif'
 skimage.io.imsave(save_path, RGB_img.astype('uint8'))
 
 
