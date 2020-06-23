@@ -21,8 +21,8 @@ parser = argparse.ArgumentParser(description='Train a network.')
 parser.add_argument('--deterministic', action='store_true',
     help='Run in fully deterministic mode (at the cost of execution speed).')
 
-parser.add_argument('-train_data', '--train_data_dir', type=str, default='/home/xiaotx/2017EXBB/train_data/train_data_downsample_2/', help='training data')
-parser.add_argument('-b', '--batch_size', type=int, default=8, help='training batch size')
+parser.add_argument('-train_data', '--train_data_dir', type=str, default='//home/x903102883/2017EXBB/train_data_sep/thick+sparse/', help='training data')
+parser.add_argument('-b', '--batch_size', type=int, default=1, help='training batch size')
 parser.add_argument('--lr', type=float, default=1e-4, help='training learning rate')
 parser.add_argument('--gamma', type=float, default=0.9, help='multiplicative factor of learning rate decay')
 parser.add_argument('--step', type=int, default=1e5*2, help='adjust learning rate every step')
@@ -31,11 +31,8 @@ parser.add_argument('--delta', default=(15, 15, 15), help='delta offset')
 parser.add_argument('--input_size', default=(51, 51, 51), help ='input size')
 
 parser.add_argument('--resume', type=str, default=None, help='resume training')
-parser.add_argument('--save_path', type=str, default='/home/xiaotx/2017EXBB/model/model_fov39_delta4_downsample_2_dep12/', help='model save path')
+parser.add_argument('--save_path', type=str, default='/home/x903102883/FFN_LM_v0.2/model/', help='model save path')
 parser.add_argument('--save_interval', type=str, default=1000, help='model save interval')
-parser.add_argument('--log_save_path', type=str, default='/home/xiaotx/2017EXBB/model/model_log/', help='model_log save path')
-
-
 
 parser.add_argument('--clip_grad_thr', type=float, default=0.7, help='grad clip threshold')
 parser.add_argument('--interval', type=int, default=120, help='How often to save model (in seconds).')
