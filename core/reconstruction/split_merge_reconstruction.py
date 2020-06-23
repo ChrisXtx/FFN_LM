@@ -2,7 +2,7 @@
 import os
 import h5py
 import argparse
-from core.models.ffn import FFN
+
 from core.data.utils import *
 import pickle
 from core.tool.tools import *
