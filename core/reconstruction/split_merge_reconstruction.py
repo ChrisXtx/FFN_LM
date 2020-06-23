@@ -234,12 +234,13 @@ segs_path_test = '/home/x903102883/2017EXBB/whole_volume_inf/part4/test/'
 merge_dict_save_path_test = segs_path_test
 merge_dict_path_test = segs_path_test + 'merge_dict.pkl'
 
-segs_code_dict = convert_coor_all(segs_path_test)
-merge_dict = merge(segs_path_test, segs_code_dict, 0.20)
-print(len(merge_dict))
+# segs_code_dict = convert_coor_all(segs_path_test)
+# merge_dict = merge(segs_path_test, segs_code_dict, 0.20)
+# print(len(merge_dict))
+#pa
+# pickle_obj(merge_dict, 'merge_dict', merge_dict_save_path_test)
 
 
-pickle_obj(merge_dict, 'merge_dict', merge_dict_save_path_test)
 merge_dict_test = load_obj(merge_dict_path_test)
 
 
@@ -247,7 +248,7 @@ merge_dict_test = load_obj(merge_dict_path_test)
 
 merge_group_dict_test = merge_segs(merge_dict_test)
 
-image_shape = (160, 500, 1887)
+image_shape = (160, 5000, 1887)
 
 segmentation = segs_reconstructor(segs_path_test, merge_group_dict_test, image_shape, cons_thr=1)
 RGB_img = segs_to_RGB(segmentation)

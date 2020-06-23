@@ -2,45 +2,45 @@ import os
 import h5py
 import argparse
 from core.models.ffn import FFN
-from core.data.utils import *
+import core.data.utils as inf
 from core.tool.tools import *
 import threading
-
+import torch
+import random
 
 parser = argparse.ArgumentParser(description='inference script')
 parser.add_argument('--data', type=str,
-                    default='/home/xiaotx/2017EXBB/inf_whole/Fused_RGB_down_2.tif',
+                    default='/home/x903102883/2017EXBB/whole_volume_inf/Fused-RGB_down2.tif',
                     help='input images')
 parser.add_argument('--seed', type=str,
-                    default='/home/xiaotx/2017EXBB/inf_whole/part5/part5_seeds.h5',
+                    default='/home/x903102883/2017EXBB/whole_volume_inf/part4/whole_part4_seeds.h5',
                     help='swc_skeletons')
 parser.add_argument('--model', type=str,
-                    default='/home/xiaotx/2017EXBB/inf_whole/down_2_adamffn_model_fov:39_delta:4_depth:26_recall84.84065095778945.pth',
+                    default='/home/x903102883/2017EXBB/whole_volume_inf/down_2_adamffn_model_fov_39_delta_4_depth_26_recall87.6557408472302.pth',
                     help='path to ffn model')
+
 parser.add_argument('--data_save', type=str,
-                    default='/home/xiaotx/2017EXBB/inf_whole/part5/',
+                    default='/home/x903102883/2017EXBB/whole_volume_inf/part4/',
                     help='swc_skeletons')
 
 parser.add_argument('--threads', type=int, default=1, help='tag the files')
-
 parser.add_argument('--save_chunk', type=int, default=5000, help='separate the seg_coords from seeds by chunk')
-
+parser.add_argument('--buffer_distance', type=int, default=0, help='swc_skeletons_dis_from_overlap')
 parser.add_argument('--delta', default=(4, 4, 4), help='delta offset')
 parser.add_argument('--input_size', default=(39, 39, 39), help='input size')
+parser.add_argument('--swc_scaling', type=int, default=2, help='swc_scaling')
 parser.add_argument('--depth', type=int, default=26, help='depth of ffn')
 parser.add_argument('--seg_thr', type=float, default=0.6, help='input size')
 parser.add_argument('--mov_thr', type=float, default=0.8, help='movable thr')
 parser.add_argument('--act_thr', type=float, default=0.8, help='activation of seg')
 parser.add_argument('--re_seg_thr', type=int, default=2, help='will not seed here if segmented many times')
 parser.add_argument('--vox_thr', type=int, default=500, help='remove if too small')
-parser.add_argument('--resume_seed', type=int, default=0, help='resume_seed')
+parser.add_argument('--resume_seed', type=int, default=94409, help='resume_seed')
 parser.add_argument('--tag', type=str, default='whole_par4', help='tag the files')
-
 
 args = parser.parse_args()
 
-
-
+# pre_load
 
 if args.data[-2:] == 'h5':
     with h5py.File(args.data, 'r') as f:
@@ -48,6 +48,23 @@ if args.data[-2:] == 'h5':
 else:
     images = ((skimage.io.imread(args.data)).astype(np.float32) - 128) / 33
 
+segs_saved_files = sort_files(args.data_save)
+files_num = len(segs_saved_files)-1
+if files_num > 1:
+    resume_segs_file = ''
+    # find the last part
+    for file_index in range(files_num):
+        if 'seg_of_seeds' not in segs_saved_files[files_num]:
+            files_num -= 1
+
+            continue
+        resume_segs_file = segs_saved_files[files_num]
+
+    with h5py.File(args.data_save + resume_segs_file, 'r') as segs:
+        ids = list(segs.keys())
+        sorted_ids = natsort.natsorted(ids, reverse=False)
+        resume_seed = int(sorted_ids[len(sorted_ids)-1])
+    args.resume_seed = resume_seed
 
 
 def canvas_init(process_id):
@@ -57,7 +74,7 @@ def canvas_init(process_id):
     model.eval()
 
 
-    canvas_inf = Canvas(model, args.input_size, args.delta, args.seg_thr, args.mov_thr,
+    canvas_inf = inf.Canvas(model, args.input_size, args.delta, args.seg_thr, args.mov_thr,
                         args.act_thr, args.re_seg_thr, args.vox_thr, args.data_save, process_id)
     inf_seed_dict = {}
     with h5py.File(args.seed, 'r') as segs:
