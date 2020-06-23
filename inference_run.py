@@ -107,7 +107,7 @@ def run (canvas_inf, inf_seed_dict, process_id, process_num):
     seeds = multi_th_inf_seed_dict[ps_spe].keys()
     for seed_id in seeds :
         if seed_id == list(seeds)[-1]:
-            skimage.io.imsave(args.data_save + 'finished_tif', np.zeros((8, 8, 8)).astype('uint8'))
+            skimage.io.imsave(args.data_save + 'finished.tif', np.zeros((8, 8, 8)).astype('uint8'))
             break
         if not seed_id % process_num == process_id:
             continue
