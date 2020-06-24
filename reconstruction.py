@@ -4,7 +4,8 @@ import h5py
 import argparse
 import pickle
 from core.tool.tools import *
-
+import skimage
+import random
 
 def coor_to_code(array):
     codes_array = np.zeros((len(array),), dtype=np.int32)
