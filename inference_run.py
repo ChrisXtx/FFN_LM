@@ -16,7 +16,7 @@ parser.add_argument('--seed', type=str,
                     default='/home/x903102883/2017EXBB/whole_volume_inf/part4/whole_part4_seeds.h5',
                     help='swc_skeletons')
 parser.add_argument('--model', type=str,
-                    default='/home/xiaotx/2017EXBB/inf_whole/down_2_adamffn_model_fov:39_delta:4_depth:26_recall84.84065095778945.pth',
+                    default='/home/xiaotx/2017EXBB/inf_whole/down_2ffn_model_fov_39_delta_4_depth_26.pth',
                     help='path to ffn model')
 
 parser.add_argument('--data_save', type=str,
