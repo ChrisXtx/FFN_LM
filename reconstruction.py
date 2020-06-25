@@ -198,7 +198,7 @@ def segs_reconstructor(segs_path, merge_group_dict, image_shape, cons_thr=1):
     :param cons_thr:  the times that a voxel should be included to reach a consensus
     :return:
     """
-    segmentation = np.zeros(image_shape, dtype='uint8')
+    segmentation = np.zeros(image_shape, dtype='uint32')
 
     segs_dict = {}
     segs_files = sort_files(segs_path)
@@ -260,7 +260,8 @@ image_shape = (160, 5000, 1887)
 segmentation = segs_reconstructor(segs_path_test, merge_group_dict_test, image_shape, cons_thr=1)
 RGB_img = segs_to_RGB(segmentation)
 
-save_path = merge_dict_save_path_test + 'test_part5.tif'
+save_path = merge_dict_save_path_test + 'test.tif'
 skimage.io.imsave(save_path, RGB_img.astype('uint8'))
-
+seg_save_path = merge_dict_save_path_test + 'test_RGB.tif'
+skimage.io.imsave(seg_save_path, segmentation.astype('uint32'))
 
