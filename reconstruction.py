@@ -6,6 +6,16 @@ import pickle
 from core.tool.tools import *
 import skimage
 import random
+import argparse
+
+parser = argparse.ArgumentParser(description='inference script')
+parser.add_argument('--recon_dir', type=str,
+                    default='',
+                    help='input images')
+
+args = parser.parse_args()
+
+
 
 def coor_to_code(array):
     codes_array = np.zeros((len(array),), dtype=np.int32)
@@ -229,7 +239,7 @@ def segs_reconstructor(segs_path, merge_group_dict, image_shape, cons_thr=1):
     return segmentation
 
 
-segs_path_test = '/home/xiaotx/2017EXBB/inf_whole/part5/'
+segs_path_test = args.recon_dir
 
 merge_dict_save_path_test = segs_path_test
 merge_dict_path_test = segs_path_test + 'merge_dict.pkl'
