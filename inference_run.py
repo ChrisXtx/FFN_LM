@@ -10,13 +10,13 @@ import random
 
 parser = argparse.ArgumentParser(description='inference script')
 parser.add_argument('--data', type=str,
-                    default='/home/x903102883/2017EXBB/whole_volume_inf/Fused-RGB_down2.tif',
+                    default='/home/xiaotx/2017EXBB/inf_whole/Fused_RGB_down_2.tif',
                     help='input images')
 parser.add_argument('--seed', type=str,
                     default='/home/x903102883/2017EXBB/whole_volume_inf/part4/whole_part4_seeds.h5',
                     help='swc_skeletons')
 parser.add_argument('--model', type=str,
-                    default='/home/x903102883/2017EXBB/whole_volume_inf/down_2_adamffn_model_fov_39_delta_4_depth_26_recall87.6557408472302.pth',
+                    default='/home/xiaotx/2017EXBB/inf_whole/down_2ffn_model_fov_39_delta_4_depth_26.pth',
                     help='path to ffn model')
 
 parser.add_argument('--data_save', type=str,
