@@ -10,18 +10,18 @@ import random
 
 parser = argparse.ArgumentParser(description='inference script')
 parser.add_argument('--data', type=str,
-                    default='/home/xiaotx/2017EXBB/inf_whole/Fused_RGB_down_2.tif',
+                    default='/home/x903102883/2017EXBB/whole_volume_inf/Fused-RGB_down2.tif',
                     help='input images')
 parser.add_argument('--seed', type=str,
                     default='/home/x903102883/2017EXBB/whole_volume_inf/part4/whole_part4_seeds.h5',
                     help='swc_skeletons')
 parser.add_argument('--model', type=str,
-                    default='/home/xiaotx/2017EXBB/inf_whole/down_2ffn_model_fov_39_delta_4_depth_26.pth',
+                    default='/home/x903102883/2017EXBB/whole_volume_inf/down_2_adamffn_model_fov_39_delta_4_depth_26_recall87.6557408472302.pth',
                     help='path to ffn model')
 
 parser.add_argument('--data_save', type=str,
                     default='/home/x903102883/2017EXBB/whole_volume_inf/part4/',
-                    help='swc_skeletons')
+                    help='save_segs')
 
 parser.add_argument('--threads', type=int, default=1, help='tag the files')
 parser.add_argument('--save_chunk', type=int, default=5000, help='separate the seg_coords from seeds by chunk')
@@ -46,8 +46,10 @@ if args.data[-2:] == 'h5':
 else:
     images = ((skimage.io.imread(args.data)).astype(np.float32) - 128) / 33
 
+
+# multi_seeds_resume
 segs_saved_files = sort_files(args.data_save)
-files_num = len(segs_saved_files)-1
+files_num = len(segs_saved_files) - 1
 if files_num > 1:
     resume_segs_file = ''
     # find the last part
@@ -72,41 +74,38 @@ else:
     re_seged_count_mask = np.zeros(images.shape[:-1], dtype=np.uint8)
 
 
-
 def canvas_init(process_id):
     model = FFN(in_channels=4, out_channels=1, input_size=args.input_size, delta=args.delta, depth=args.depth).cuda()
     assert os.path.isfile(args.model)
     model.load_state_dict(torch.load(args.model))
     model.eval()
 
-
     canvas_inf = inf.Canvas(model, args.input_size, args.delta, args.seg_thr, args.mov_thr,
-                        args.act_thr, args.re_seg_thr, args.vox_thr, args.data_save, process_id)
+                            args.act_thr, args.re_seg_thr, args.vox_thr, args.data_save, process_id)
     inf_seed_dict = {}
-    with h5py.File(args.seed, 'r') as segs:
-        seeds = segs['seeds'][()]
-        seed_id = 1
-        random.seed(30)
-        seeds = list(seeds)
-        for coord in seeds :
-
-            inf_seed_dict[seed_id] = coord
-            seed_id += 1
+    if os.path.exists(args.seed):
+        with h5py.File(args.seed, 'r') as segs:
+            seeds = segs['seeds'][()]
+            seed_id = 1
+            random.seed(30)
+            seeds = list(seeds)
+            for coord in seeds:
+                inf_seed_dict[seed_id] = coord
+                seed_id += 1
 
     return canvas_inf, inf_seed_dict
 
-def run (canvas_inf, inf_seed_dict, process_id, process_num):
 
+def run(canvas_inf, inf_seed_dict, process_id, process_num):
     # run inference on every seed and save their segmentation
-   
 
     # individualize the dict
     ps_spe = 'inf_seed_dict' + str(process_id)
     multi_th_inf_seed_dict = {}
     multi_th_inf_seed_dict[ps_spe] = inf_seed_dict
     seeds = multi_th_inf_seed_dict[ps_spe].keys()
-    for seed_id in seeds :
-        
+    for seed_id in seeds:
+
         if not seed_id % process_num == process_id:
             continue
         if seed_id < args.resume_seed:
@@ -119,16 +118,17 @@ def run (canvas_inf, inf_seed_dict, process_id, process_num):
             continue
 
 
-
-
-
 if __name__ == '__main__':
     # multiprocess code
-   
 
     threads = args.threads
 
     for thread in range(threads):
         canvas_inf, inf_seed_dict = canvas_init(thread)
+
+
+        # single_seed_run
+        #inf_seed_dict = {1: [z,y,x]}
+
         convas_thread = threading.Thread(target=run, args=(canvas_inf, inf_seed_dict, thread, threads))  # main process
         convas_thread.start()

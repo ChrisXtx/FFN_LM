@@ -7,14 +7,14 @@ import torch
 import numpy as np
 from core.models.ffn import FFN
 from core.data.utils import Canvas
-
+import skimage
 parser = argparse.ArgumentParser(description='Inference script')
-parser.add_argument('--data', type=str, default='', help='Input images')
-parser.add_argument('--model', type=str, default='',
+parser.add_argument('--data', type=str, default='/home/x903102883/2017EXBB/train_data_sep/sparse/(0, 512, 0)_raw.h5', help='Input images')
+parser.add_argument('--model', type=str, default='/home/x903102883/2017EXBB/whole_volume_inf/down_2_adamffn_model_fov_39_delta_4_depth_26_recall87.6557408472302.pth',
                     help='Path to FFN model')
 parser.add_argument('--seeds', type=str, default=None,
                     help='Path to seed coordinates file')
-parser.add_argument('--output', type=str, default='',
+parser.add_argument('--output', type=str, default='/home/x903102883/2017EXBB/whole_volume_inf/',
                     help='Path to output files')
 parser.add_argument('--delta', default=(15, 15, 15),
                     help='Delta offset')
@@ -26,6 +26,7 @@ parser.add_argument('--mov_thr', type=float, default=0.7,
                     help='Move threshold')
 parser.add_argument('--act_thr', type=float, default=0.8,
                     help='Act threshold')
+parser.add_argument('--tag', type=str, default='single_seed_inf_', help='tag the files')
 args = parser.parse_args()
 
 
@@ -55,8 +56,12 @@ def run():
     model.eval()
 
     # Open the input image file and read the stack of images
-    with h5py.File(args.data, 'r') as f:
-        images = (f['/image'][()].astype(np.float32) - 128) / 33
+    if args.data[-2:] == 'h5':
+        with h5py.File(args.data, 'r') as f:
+            print(f.keys())
+            images = (f['/images'][()].astype(np.float32) - 128) / 33
+    else:
+        images = ((skimage.io.imread(args.data)).astype(np.float32) - 128) / 33
 
     seed_list = []
     if args.seeds is not None:
@@ -64,8 +69,9 @@ def run():
         with h5py.File(args.seeds, 'r') as f:
             seed_list = f['/inference_coor'][()].astype(np.int64)
 
-    canva = Canvas(model, images, seed_list, args.input_size, args.delta,
-                   args.seg_thr, args.mov_thr, args.act_thr, args.output)
+    canva = Canvas(model, args.input_size, args.delta,
+                   args.seg_thr, args.mov_thr, args.act_thr, re_seg_thr=5,vox_thr=100,data_save_path=args.output,
+                   process_id=1)
 
     # TODO: Modify segment_all to process seed_list
     # For now use segment_at instead
@@ -76,7 +82,7 @@ def run():
     else:
         # Manually specify a seed location
         # TODO: input seed location from user
-        canva.segment_at((42, 184, 40), 0)
+        canva.segment_at((42, 184, 40), 0, args.tag)
 
     # canva.segment_all()
 

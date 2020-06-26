@@ -1,5 +1,3 @@
-
-
 import itertools
 import sys
 from scipy.special import expit
@@ -38,9 +36,8 @@ save_count = 1
 re_seged_count_mask = inference_run.re_seged_count_mask
 save_chunk = inference_run.args.save_chunk
 resume_seed = inference_run.args.resume_seed
-save_part = 1 + int(resume_seed/save_chunk)
+save_part = 1 + int(resume_seed / save_chunk)
 images = inference_run.images
-
 
 
 def sigmoid(x):
@@ -233,23 +230,19 @@ def quantize_probability(prob):
 
 def get_scored_move_offsets(deltas, prob_map, threshold=0.8, flex_faces=1):
     """Looks for potential moves for a FFN.
-
     The possible moves are determined by extracting probability map values
     corresponding to cuboid faces at +/- deltas, and considering the highest
     probability value for every face.
-
     Args:
       deltas: (z,y,x) tuple of base move offsets for the 3 axes
       prob_map: current probability map as a (z,y,x) numpy array
       threshold: minimum score required at the new FoV center for a move to be
           considered valid
       flex_faces : multipliers of the faces
-
     Yields:
       tuples of:
         score (probability at the new FoV center),
         position offset tuple (z,y,x) relative to center of prob_map
-
       The order of the returned tuples is arbitrary and should not be depended
       upon. In particular, the tuples are not necessarily sorted by score.
     """
@@ -315,7 +308,6 @@ def get_scored_move_offsets(deltas, prob_map, threshold=0.8, flex_faces=1):
 
 class BaseMovementPolicy(object):
     """Base class for movement policy queues.
-
     The principal usage is to initialize once with the policy's parameters and
     set up a queue for candidate positions. From this queue candidates can be
     iteratively consumed and the scores should be updated in the FFN
@@ -324,7 +316,6 @@ class BaseMovementPolicy(object):
 
     def __init__(self, canvas, scored_coords, deltas):
         """Initializes the policy.
-
         Args:
           canvas: Canvas object for FFN inference
           scored_coords: mutable container of tuples (score, zyx coord)
@@ -349,7 +340,6 @@ class BaseMovementPolicy(object):
 
     def update(self, prob_map, position):
         """Updates the state after an FFN inference call.
-
         Args:
           prob_map: object probability map returned by the FFN (in logit space)
           position: postiion of the center of the FoV where inference was performed
@@ -366,7 +356,6 @@ class BaseMovementPolicy(object):
 
     def reset_state(self, start_pos):
         """Resets the policy.
-
         Args:
           start_pos: starting position of the current object as z, y, x
         """
@@ -436,11 +425,8 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
 
 class Canvas(object):
 
-
-
     def __init__(self, model, size, delta, seg_thr, mov_thr, act_thr, re_seg_thr, vox_thr, data_save_path,
                  process_id):
-
 
         self.process_id = process_id
         self.model = model
@@ -458,7 +444,6 @@ class Canvas(object):
         self.seed = np.zeros(self.shape, dtype=np.float32)
         self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)  # temp save out (pred mask) for each step
 
-
         self.vox_thr = vox_thr
         self.target_dic = {}
 
@@ -473,7 +458,6 @@ class Canvas(object):
 
     def init_seed(self, pos):
         """Reinitiailizes the object mask with a seed.
-
         Args:
           pos: position at which to place the seed (z, y, x)
         """
@@ -494,12 +478,10 @@ class Canvas(object):
 
     def is_valid_pos(self, pos, ignore_move_threshold=False):
         """Returns True if segmentation should be attempted at the given position.
-
         Args:
           pos: position to check as (z, y, x)
           ignore_move_threshold: (boolean) when starting a new segment at pos the
               move threshold can and must be ignored.
-
         Returns:
           Boolean indicating whether to run FFN inference at the given position.
         """
@@ -620,11 +602,9 @@ class Canvas(object):
             if not self.is_valid_pos(start_pos, ignore_move_threshold=True):
                 return
 
-
             if re_seged_count_mask[start_pos] >= self.re_seg_thr:
                 print('skip', id)
                 return
-
 
             self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)
             self.seed = np.zeros(self.shape, dtype=np.float32)
@@ -677,9 +657,7 @@ class Canvas(object):
             mask_seg_prob_i = (self.seg_prob_i >= 128)
             if np.sum(mask_seg_prob_i) >= self.vox_thr:
 
-
                 re_seged_count_mask[mask_seg_prob_i] += 1
-
 
                 # save segmentation from each seed
                 seg_prob_coords = np.argwhere(mask_seg_prob_i).astype('int16')
@@ -688,22 +666,22 @@ class Canvas(object):
                 save_count += 1
                 id_save = '{}'.format(id)
                 print('save_count', save_count, "process id", self.process_id)
-                
+
                 if save_count % save_chunk == 0:
-                    
                     save_part += 1
-                    
+
                 if save_count % 2000 == 0:
-                    skimage.io.imsave(inference_run.args.data_save + 're_seged_count_mask.tif', re_seged_count_mask.astype('uint8'))
-                
+                    skimage.io.imsave(inference_run.args.data_save + 're_seged_count_mask.tif',
+                                      re_seged_count_mask.astype('uint8'))
+
                 print("segmentation saved! seed:", id, "coord:", start_pos, "completed_num:", save_count)
                 try:
-                    with h5py.File(self.data_save_path + tag + "seg_of_seeds_test_part{}.h5".format(save_part), 'a') as f:
+                    with h5py.File(self.data_save_path + tag + "seg_of_seeds_test_part{}.h5".format(save_part),
+                                   'a') as f:
                         f.create_dataset(id_save, data=seg_prob_coords, compression='gzip')
                 except OSError:
                     return True
                 t_lock.release()
-
 
                 return True
             else:
@@ -711,4 +689,3 @@ class Canvas(object):
 
         except RuntimeError:
             return False
-
