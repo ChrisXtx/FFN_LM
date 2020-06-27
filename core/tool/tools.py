@@ -29,6 +29,15 @@ def sort_files(dir_path):
     sorted_files = natsort.natsorted(files, reverse=False)
     return sorted_files
 
+def pickle_obj(obj, name, path ):
+    with open(path + name + '.pkl', 'wb') as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+
+def load_obj(file_path):
+    with open(file_path, 'rb') as f:
+        return pickle.load(f)
+
 """
 def increase_contrast(image):
     #Uses CLAHE (Contrast Limited Adaptive Histogram Equalization) to increase
