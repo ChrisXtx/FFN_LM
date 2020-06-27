@@ -53,7 +53,7 @@ parser.add_argument('--resume_step', type=int, default=2869000, help='start_step
 
 args = parser.parse_args()
 
-args = parser.parse_args()
+
 
 deterministic = args.deterministic
 if deterministic:
