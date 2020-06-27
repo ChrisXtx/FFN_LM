@@ -10,7 +10,9 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import numpy as np
 from core.models.ffn import FFN
-from core.data import BatchCreator
+from core.data.batch_creator import fixed_offsets, get_batch, BatchCreator
+from scipy.special import expit
+from scipy.special import logit
 from pathlib import Path
 import natsort
 import adabound
