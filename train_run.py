@@ -27,7 +27,7 @@ import os
 parser = argparse.ArgumentParser(description='Train a network.')
 parser.add_argument('--deterministic', action='store_true',help='Run in fully deterministic mode (at the cost of execution speed).')
 
-parser.add_argument('-train_data', '--train_data_dir', type=str, default='/home/x903102883/2017EXBB/train_data_downsample_2_bound24/train/', help='training data')
+parser.add_argument('-train_data', '--train_data_dir', type=str, default='/nobackup/users/xiaotx/ffn_lm/xtx_train/2017EXBB/train_down2/', help='training data')
 parser.add_argument('-b', '--batch_size', type=int, default=4, help='training batch size')
 parser.add_argument('--lr', type=float, default=1e-4, help='training learning rate')
 parser.add_argument('--gamma', type=float, default=0.9, help='multiplicative factor of learning rate decay')
@@ -36,8 +36,8 @@ parser.add_argument('--depth', type=int, default=26, help='depth of ffn')
 parser.add_argument('--delta', default=(4, 4,4), help='delta offset')
 parser.add_argument('--input_size', default=(39, 39, 39), help ='input size')
 
-parser.add_argument('--resume', type=str, default= '/home/x903102883/FFN_LM_v0.2/model/down_2_adamffn_model_fov:39_delta:4_depth:26_recall93.56709552696488.pth', help='resume training')
-parser.add_argument('--save_path', type=str, default='/home/x903102883/FFN_LM_v0.2/model/', help='model save path')
+parser.add_argument('--resume', type=str, default= '/nobackup/users/xiaotx/ffn_lm/xtx_train/2017EXBB/FFN_LM/model/down_2_adamffn_model_fov:39_delta:4_depth:26.pth', help='resume training')
+parser.add_argument('--save_path', type=str, default='/nobackup/users/xiaotx/ffn_lm/xtx_train/2017EXBB/FFN_LM/model/', help='model save path')
 parser.add_argument('--save_interval', type=str, default= 2000, help='model save interval')
 
 
@@ -113,7 +113,7 @@ def run():
     while cnt < args.iter:
         cnt += 1
 
-        if cnt % 10 == 0:
+        if cnt % 1000 == 0:
             resume['resume_step'] = cnt + args.resume_step
             pickle_obj(resume, 'resume_step', args.save_path)
 
