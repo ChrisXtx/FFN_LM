@@ -2,7 +2,6 @@ import argparse
 import time
 import random
 from torch.utils.data import DataLoader
-from core.data.utils import *
 from functools import partial
 import os
 import torch
