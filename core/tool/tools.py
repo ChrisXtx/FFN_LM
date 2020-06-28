@@ -1,23 +1,15 @@
 
 import h5py
 import numpy as np
-
 from pathlib import Path
 import natsort
 import skimage
 import argparse
 from scipy import ndimage
+import pickle
+import h5py
+import os
 
-
-def z_resize_no_inter(data,factor):
-    resized = skimage.transform.resize(data,
-                                   (data.shape[0] * factor, data.shape[1], data.shape[2]),
-                                   mode='edge',
-                                   anti_aliasing=False,
-                                   anti_aliasing_sigma=None,
-                                   preserve_range=True,
-                                   order=0)
-    return resized
 
 
 
@@ -37,6 +29,104 @@ def pickle_obj(obj, name, path ):
 def load_obj(file_path):
     with open(file_path, 'rb') as f:
         return pickle.load(f)
+
+
+def load_raw_image(path):
+    if path[-2:] == 'h5':
+        with h5py.File(path, 'r') as f:
+            images = (f['/image'][()].astype(np.float32) - 128) / 33
+    else:
+        images = ((skimage.io.imread(path)).astype(np.float32) - 128) / 33
+    return images
+
+
+
+def resume_dict_load(dict_path, name, resume_obj):
+    if os.path.exists(dict_path + name + '.pkl'):
+        resume = load_obj(dict_path + name + '.pkl')
+    else:
+        resume = {'resume_seed': resume_obj}
+    resume_obj = resume['resume_seed']
+    print('resume', resume_obj)
+    return resume
+
+
+def resume_re_segd_count_mask(path,shape):
+    if os.path.exists(path + 're_seged_count_mask.tif'):
+        re_seged_count_mask = skimage.io.imread(path + 're_seged_count_mask.tif')
+    else:
+        re_seged_count_mask = np.zeros(shape, dtype=np.uint8)
+    return re_seged_count_mask
+
+def seeds_to_dict(seeds_path):
+    inf_seed_dict = {}
+    if os.path.exists(seeds_path):
+        with h5py.File(seeds_path, 'r') as segs:
+            seeds = segs['seeds'][()]
+            seed_id = 1
+            seeds = list(seeds)
+            for coord in seeds:
+                inf_seed_dict[seed_id] = coord
+                seed_id += 1
+    else:
+        print("seeds file is not exist")
+
+    return inf_seed_dict
+
+
+
+
+
+
+
+
+
+
+
+def z_resize_no_inter(data,factor):
+    resized = skimage.transform.resize(data,
+                                   (data.shape[0] * factor, data.shape[1], data.shape[2]),
+                                   mode='edge',
+                                   anti_aliasing=False,
+                                   anti_aliasing_sigma=None,
+                                   preserve_range=True,
+                                   order=0)
+    return resized
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 """
 def increase_contrast(image):
