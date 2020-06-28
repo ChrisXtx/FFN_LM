@@ -16,6 +16,7 @@ pillow
 colorlog
 tensorboardX
 torchvision
+natsort
 
 # Only required for running a tensorboard server:
 tensorboard>=1.13
