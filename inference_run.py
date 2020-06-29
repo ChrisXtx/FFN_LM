@@ -61,7 +61,9 @@ def canvas_init(process_id):
                             args.act_thr, args.re_seg_thr, args.vox_thr, args.data_save, re_seged_count_mask,
                             args.save_chunk, args.resume_seed, process_id)
 
-    inf_seed_dict = seeds_to_dict(args.seed)
+    inf_seed_dict = {}
+    if os.path.exists(args.seed):
+      inf_seed_dict = seeds_to_dict(args.seed)
 
     return canvas_inf, inf_seed_dict
 
