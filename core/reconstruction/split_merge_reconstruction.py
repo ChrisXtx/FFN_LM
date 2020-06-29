@@ -8,6 +8,7 @@ import pickle
 from core.tool.tools import *
 import sys
 sys.setrecursionlimit(10**7)
+
 def coor_to_code(array):
     codes_array = np.zeros((len(array),), dtype=np.int32)
     for index in range(len(array)):
