@@ -89,7 +89,7 @@ def run():
     print('resume_step', args.resume_step)
 
     if args.tb == None:
-        tb = SummaryWriter('./tensorboard/tb_train_log_fov:{}_delta:{}_depth:{}.pth'
+        tb = SummaryWriter('./tensorboard/'+args.tag+'tb_train_log_fov:{}_delta:{}_depth:{}.pth'
                        .format(list(args.input_size)[0], list(args.delta)[0], args.depth))
     else:
         tb = SummaryWriter(args.tb)
