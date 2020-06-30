@@ -501,16 +501,24 @@ class Canvas(object):
 
                 sel_i_s = sel_i  # updated_cube_fov_size
 
+                
+                
+                # single_seed
                 """
+                if not os.path.exists('./data/'):
+                    os.makedirs('./data/')
                 try:
                     mask = self.seed[tuple(sel_i_s)] >= self.seg_thr
                     self.seg_prob_i[tuple(sel_i_s)][mask] = quantize_probability(expit(self.seed[tuple(sel_i_s)][mask]))
                 except RuntimeError:
                     return False
                 # save the pred_mask out for each step
-                skimage.io.imsave('./data/FFN_object1_inf_{}_step{}.tif'.format(step_iter, step), self.seg_prob_i)
+                skimage.io.imsave('./data/FFN_object1_inf_{}_step{}.tif'.format(id, step_iter), self.seg_prob_i)
                 """
-
+            
+            
+            
+            
                 """update_movable_location"""
 
                 self.movement_policy.update(pred, pos)
