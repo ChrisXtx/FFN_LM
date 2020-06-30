@@ -40,6 +40,8 @@ parser.add_argument('--mov_thr', type=float, default=0.8, help='movable thr')
 parser.add_argument('--act_thr', type=float, default=0.8, help='activation of seg')
 parser.add_argument('--re_seg_thr', type=int, default=3, help='will not seed here if segmented many times')
 parser.add_argument('--vox_thr', type=int, default=500, help='remove if too small')
+parser.add_argument('--manual_seed', type=bool, default=False, help='specify the seeds source')
+
 
 args = parser.parse_args()
 
@@ -59,7 +61,7 @@ def canvas_init(process_id):
 
     canvas_inf = inf.Canvas(model, images, args.input_size, args.delta, args.seg_thr, args.mov_thr,
                             args.act_thr, args.re_seg_thr, args.vox_thr, args.data_save, re_seged_count_mask,
-                            args.save_chunk, args.resume_seed, process_id)
+                            args.save_chunk, args.resume_seed, args.manual_seed process_id)
 
     inf_seed_dict = {}
     if os.path.exists(args.seed):
