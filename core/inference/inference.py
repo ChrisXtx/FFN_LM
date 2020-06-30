@@ -293,9 +293,13 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
 class Canvas(object):
 
     def __init__(self, model, images, size, delta, seg_thr, mov_thr, act_thr, re_seg_thr, vox_thr, data_save_path,
-                 re_segd_count_mask, save_chunk, resume_seed, process_id):
+                 re_segd_count_mask, save_chunk, resume_seed, manual_seed, process_id):
 
+        
+        
+        
         self.process_id = process_id
+        self.manual_seed = manual_seed
         self.model = model
         self.images = images
 
@@ -504,17 +508,17 @@ class Canvas(object):
                 
                 
                 # single_seed
-                """
-                if not os.path.exists('./data/'):
-                    os.makedirs('./data/')
-                try:
-                    mask = self.seed[tuple(sel_i_s)] >= self.seg_thr
-                    self.seg_prob_i[tuple(sel_i_s)][mask] = quantize_probability(expit(self.seed[tuple(sel_i_s)][mask]))
-                except RuntimeError:
-                    return False
-                # save the pred_mask out for each step
-                skimage.io.imsave('./data/FFN_object1_inf_{}_step{}.tif'.format(id, step_iter), self.seg_prob_i)
-                """
+                if self.manual_seed:
+                    if not os.path.exists('./data/'):
+                        os.makedirs('./data/')
+                    try:
+                        mask = self.seed[tuple(sel_i_s)] >= self.seg_thr
+                        self.seg_prob_i[tuple(sel_i_s)][mask] = quantize_probability(expit(self.seed[tuple(sel_i_s)][mask]))
+                    except RuntimeError:
+                        return False
+                    # save the pred_mask out for each step
+                    skimage.io.imsave('./data/FFN_object_inf_{}_step{}.tif'.format(id, step_iter), self.seg_prob_i)
+                
             
             
             
