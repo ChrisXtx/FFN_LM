@@ -508,7 +508,7 @@ class Canvas(object):
                 except RuntimeError:
                     return False
                 # save the pred_mask out for each step
-                skimage.io.imsave('./data/FFN_object1_inf_{}_step{}.tif'.format(id, num_iters), self.seg_prob_i)
+                skimage.io.imsave('./data/FFN_object1_inf_{}_step{}.tif'.format(step_iter, step), self.seg_prob_i)
                 """
 
                 """update_movable_location"""
