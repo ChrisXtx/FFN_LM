@@ -17,7 +17,10 @@ from torch.utils.tensorboard import SummaryWriter
 from core.tool.tools import *
 from core.data.utils import *
 import os
-
+import torch.multiprocessing as mp
+import torch.nn as nn
+import torch.utils.data.distributed
+import horovod.torch as hvd
 
 parser = argparse.ArgumentParser(description='Train a network.')
 
@@ -37,11 +40,16 @@ parser.add_argument('--save_path', type=str,
                     default='/home/x903102883/FFN_LM_v0.2/model/',
                     help='model save path')
 parser.add_argument('--save_interval', type=str, default=2000, help='model save interval')
-parser.add_argument('--tag', type=str, default="down_2_adam", help='tag')
+parser.add_argument('--tag', type=str, default="ddl_hvd_SGD", help='tag')
+parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
+parser.add_argument('--seed', type=int, default=42, metavar='S', help='random seed (default: 42)')
+parser.add_argument('--fp16-allreduce', action='store_true', default=False, help='use fp16 compression during allreduce')
+parser.add_argument('--use-adasum', action='store_true', default=True, help='use adasum algorithm to do reduction')
+
 
 # training parameters
 parser.add_argument('-b', '--batch_size', type=int, default=4, help='training batch size')
-parser.add_argument('--lr', type=float, default=1e-4, help='training learning rate')
+parser.add_argument('--lr', type=float, default=1e-3, help='training learning rate')
 parser.add_argument('--depth', type=int, default=26, help='depth of ffn')
 parser.add_argument('--delta', default=(4, 4, 4), help='delta offset')
 parser.add_argument('--input_size', default=(39, 39, 39), help='input size')
@@ -74,13 +82,61 @@ if not os.path.exists(args.save_path):
 
 
 def run():
-    """model_construction"""
-    model = FFN(in_channels=4, out_channels=1, input_size=args.input_size, delta=args.delta, depth=args.depth).cuda()
+  
+  
+    args.cuda = not args.no_cuda and torch.cuda.is_available()
+    # Horovod: initialize library.
+    hvd.init()
+    torch.manual_seed(args.seed)
+    if args.cuda:
+      
+        # Horovod: pin GPU to local rank.
+        torch.cuda.set_device(hvd.local_rank())
+        torch.cuda.manual_seed(args.seed)
+        
+    # Horovod: limit # of CPU threads to be used per worker.
+    torch.set_num_threads(1)
+  
+    """model_init"""
+    model = FFN(in_channels=4, out_channels=1, input_size=args.input_size, delta=args.delta, depth=args.depth)
+  
+    #hvd ddl
+    # By default, Adasum doesn't need scaling up learning rate.
+    lr_scaler = hvd.size() if not args.use_adasum else 1
 
-    """data_load"""
+    if args.cuda:
+        # Move model to GPU.
+        model.cuda()
+        # If using GPU Adasum allreduce, scale learning rate by local_size.
+        if args.use_adasum and hvd.nccl_built():
+            lr_scaler = hvd.local_size()
+
+    # Horovod: scale learning rate by lr_scaler.
+    optimizer = optim.SGD(model.parameters(), lr=args.lr * lr_scaler,
+                          momentum=args.momentum)
+  
+
+    # Horovod: broadcast parameters & optimizer state.
+    hvd.broadcast_parameters(model.state_dict(), root_rank=0)
+    hvd.broadcast_optimizer_state(optimizer, root_rank=0)
+
+    # Horovod: (optional) compression algorithm.
+    compression = hvd.Compression.fp16 if args.fp16_allreduce else hvd.Compression.none
+
+    # Horovod: wrap optimizer with DistributedOptimizer.
+    optimizer = hvd.DistributedOptimizer(optimizer,
+                                         named_parameters=model.named_parameters(),
+                                         compression=compression,
+                                         op=hvd.Adasum if args.use_adasum else hvd.Average)
+  
+  
+  
+  
+  
+    """resume"""
     if args.resume is not None:
         model.load_state_dict(torch.load(args.resume))
-
+    
     if os.path.exists(args.save_path + 'resume_step.pkl'):
         resume = load_obj(args.save_path + 'resume_step.pkl')
     else:
@@ -93,7 +149,8 @@ def run():
                        .format(list(args.input_size)[0], list(args.delta)[0], args.depth))
     else:
         tb = SummaryWriter(args.tb)
-
+        
+    """data_load"""
     sorted_files_train_data = sort_files(args.train_data_dir)
     files_total = len(sorted_files_train_data)
 
@@ -110,31 +167,42 @@ def run():
         batch_it_dict[index] = get_batch(train_loader_dict[index], args.batch_size, args.input_size,
                                          partial(fixed_offsets, fov_moves=train_dataset_dict[index].shifts))
 
+  
+    
     """optimizer"""
-    t_last = time.time()
-    cnt = 0
-    tp = fp = tn = fn = 0
-
-    best_loss = np.inf
+    """
     if args.opt == 'Adam':
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
     else:
         optimizer = optim.SGD(model.parameters(), lr=1e-3)
-
+    """
     # optimizer = adabound.AdaBound(model.parameters(), lr=1e-3, final_lr=0.1)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step, gamma=args.gamma, last_epoch=-1)
-
+    
     """train_loop"""
+    t_last = time.time()
+    cnt = 0
+    tp = fp = tn = fn = 0
+    best_loss = np.inf
+    
+    model.train()
+    
     while cnt < args.iter:
         cnt += 1
+        
+        # resume_tb
         if cnt % 1000 == 0:
             resume['resume_step'] = cnt + args.resume_step
             pickle_obj(resume, 'resume_step', args.save_path)
 
+            
         train_num = len(input_h5data_dict)
+        random.seed(30)
         index_rand = random.randrange(0, train_num, 1)
         seeds, images, labels, offsets = next(batch_it_dict[index_rand])
-
+        
+        
+        # train
         t_curr = time.time()
         labels = labels.cuda()
         torch_seed = torch.from_numpy(seeds)
@@ -152,8 +220,11 @@ def run():
         optimizer.step()
 
         seeds[...] = updated.detach().cpu().numpy()
+        
+        
+        
 
-        pred_mask = (updated >= logit(0.9)).detach().cpu().numpy()
+        pred_mask = (updated >= logit(0.8)).detach().cpu().numpy()
         true_mask = (labels > 0.5).cpu().numpy()
         true_bg = np.logical_not(true_mask)
         pred_bg = np.logical_not(pred_mask)
@@ -199,8 +270,6 @@ def run():
 
 
 if __name__ == "__main__":
-    seed = int(time.time())
-    random.seed(seed)
 
     run()
 
