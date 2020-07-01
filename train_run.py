@@ -178,11 +178,11 @@ def run():
             input_size_r = list(args.input_size)
             delta_r = list(args.delta)
             torch.save(model.state_dict(), os.path.join(args.save_path, (
-                        str(args.stream) + 'ffn_model_fov:{}_delta:{}_depth:{}.pth'.format(input_size_r[0],
+                        str(args.tag) + 'ffn_model_fov:{}_delta:{}_depth:{}.pth'.format(input_size_r[0],
                                                                                                     delta_r[0],
                                                                                                   args.depth))))
             torch.save(model.state_dict(), os.path.join(args.save_path, (
-                    str(args.stream) + 'ffn_model_fov:{}_delta:{}_depth:{}_recall{}_.pth'.format(input_size_r[0],
+                    str(args.tag) + 'ffn_model_fov:{}_delta:{}_depth:{}_recall{}_.pth'.format(input_size_r[0],
                                                                                        delta_r[0],
                                                                                        args.depth,recall*100))))
 
