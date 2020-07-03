@@ -211,9 +211,9 @@ def segs_reconstructor(segs_path, merge_group_dict, image_shape, cons_thr=1):
             id_seg_mask = coors_to_mask(coors, image_shape)
             segmentation[id_seg_mask] = obj
             # consensus[id_seg_mask] += 1
-        """
+        
         # over segmentation split
-        if cons_thr > 1:
+        if cons_thr > 2:
             consensus_fail = (consensus < cons_thr)
             # clear the  consensus failed region
             segmentation[consensus_fail] = 0
@@ -223,7 +223,7 @@ def segs_reconstructor(segs_path, merge_group_dict, image_shape, cons_thr=1):
                 id_seg_mask = coors_to_mask(coors, image_shape)
                 split_mask = (consensus_fail * id_seg_mask)
                 segmentation[split_mask] = num_group + id
-        """
+        
     return segmentation
 
 
