@@ -95,7 +95,7 @@ def quantize_probability(prob):
     return ret.astype(np.uint8)
 
 
-def get_scored_move_offsets(deltas, prob_map, threshold=0.8, flex_faces=1):
+def get_scored_move_offsets(deltas, prob_map, flex_faces, threshold=0.8):
     """Looks for potential moves for a FFN.
     The possible moves are determined by extracting probability map values
     corresponding to cuboid faces at +/- deltas, and considering the highest
@@ -281,8 +281,8 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
         qpos = self.quantize_pos(position)
         self.done_rounded_coords.add(qpos)
 
-        scored_coords = get_scored_move_offsets(self.deltas, prob_map,
-                                                threshold=self.score_threshold, flex_faces=flex)
+        scored_coords = get_scored_move_offsets(self.deltas, prob_map, flex,
+                                                threshold=self.score_threshold)
         scored_coords = sorted(scored_coords, reverse=True)
         for score, rel_coord in scored_coords:
             # convert to whole cube coordinates
@@ -503,6 +503,7 @@ class Canvas(object):
                 """stepping"""
                 pred, sel_i = self.update_at(pos)
                 step_iter += 1
+                print('id',id,step_iter)
 
                 sel_i_s = sel_i  # updated_cube_fov_size
 
