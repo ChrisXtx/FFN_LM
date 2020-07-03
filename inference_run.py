@@ -61,7 +61,7 @@ def canvas_init(process_id):
 
     canvas_inf = inf.Canvas(model, images, args.input_size, args.delta, args.seg_thr, args.mov_thr,
                             args.act_thr, args.re_seg_thr, args.vox_thr, args.data_save, re_seged_count_mask,
-                            args.save_chunk, args.resume_seed, args.manual_seed process_id)
+                            args.save_chunk, args.resume_seed, args.manual_seed, process_id)
 
     inf_seed_dict = {}
     if os.path.exists(args.seed):
