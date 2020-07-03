@@ -10,24 +10,24 @@ import core.inference.inference as inf
 
 parser = argparse.ArgumentParser(description='inference script')
 parser.add_argument('--data', type=str,
-                    default='/home/x903102883/2017EXBB/inference_agglomeration_test/shubhra_test2/Fused-1.tif',
+                    default='/home/x903102883/2017EXBB/PF_inf/pf/axonal2/pf_axonal_2_raw_down2.tif',
                     help='input images')
 
 parser.add_argument('--seed', type=str,
-                    default='',
+                    default='/home/x903102883/2017EXBB/PF_inf/pf/axonal2/axonal2_seeds.h5',
                     help='swc_based_seeds')
 
 parser.add_argument('--model', type=str,
-                    default='/home/x903102883/FFN_LM_v0.2/model/down_2_adamffn_model_fov_39_delta_4_depth_26_recall_68.65878542082586.pth',
+                    default='/home/x903102883/FFN_LM_v0.2/model/down_2_adamffn_model_fov:39_delta:4_depth:26_recall93.56709552696488.pth',
                     help='path to ffn model')
 
 parser.add_argument('--data_save', type=str,
-                    default='/home/x903102883/2017EXBB/inference_agglomeration_test/shubhra_test2/',
+                    default='/home/x903102883/2017EXBB/PF_inf/pf/axonal2/',
                     help='save_result')
 
 parser.add_argument('--save_chunk', type=int, default=5000, help='separate the seg_coords from seeds by chunk')
 parser.add_argument('--resume_seed', type=int, default=0, help='resume_seed')
-parser.add_argument('--tag', type=str, default='test', help='tag the files')
+parser.add_argument('--tag', type=str, default='whole_par4', help='tag the files')
 
 
 parser.add_argument('--threads', type=int, default=1, help='tag the files')
@@ -38,9 +38,8 @@ parser.add_argument('--depth', type=int, default=26, help='depth of ffn')
 parser.add_argument('--seg_thr', type=float, default=0.6, help='input size')
 parser.add_argument('--mov_thr', type=float, default=0.8, help='movable thr')
 parser.add_argument('--act_thr', type=float, default=0.8, help='activation of seg')
-parser.add_argument('--flex', type=int, default=1, help='flexibility of the movement policy')
-parser.add_argument('--re_seg_thr', type=int, default=10, help='will not seed here if segmented many times')
-parser.add_argument('--vox_thr', type=int, default=50, help='remove if too small')
+parser.add_argument('--re_seg_thr', type=int, default=3, help='will not seed here if segmented many times')
+parser.add_argument('--vox_thr', type=int, default=500, help='remove if too small')
 parser.add_argument('--manual_seed', type=bool, default=False, help='specify the seeds source')
 
 
@@ -61,8 +60,8 @@ def canvas_init(process_id):
     model.eval()
 
     canvas_inf = inf.Canvas(model, images, args.input_size, args.delta, args.seg_thr, args.mov_thr,
-                            args.act_thr,args.flex, args.re_seg_thr, args.vox_thr, args.data_save, re_seged_count_mask,
-                            args.save_chunk, args.resume_seed, args.manual_seed, process_id)
+                            args.act_thr, args.re_seg_thr, args.vox_thr, args.data_save, re_seged_count_mask,
+                            args.save_chunk, args.resume_seed, args.manual_seed process_id)
 
     inf_seed_dict = {}
     if os.path.exists(args.seed):
@@ -98,8 +97,7 @@ if __name__ == '__main__':
     for thread in range(threads):
         canvas_inf, inf_seed_dict = canvas_init(thread)
         # single_seed_run
-        inf_seed_dict = {1: [80,65,63], 2:[80,51,46], 3:[75,43,23],4:[77,46,33], 5:[76,77,77], 6:[65,83,88], 7:[53,86,100],
-                         8:[26,87,105], 9:[40,87,100], 10:[78,49,39]}
+        #inf_seed_dict = {1: [z,y,x]}
 
         convas_thread = threading.Thread(target=inf_run, args=(canvas_inf, inf_seed_dict, thread, threads))  # main process
         convas_thread.start()
