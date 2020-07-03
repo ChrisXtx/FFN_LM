@@ -15,12 +15,12 @@ sys.setrecursionlimit(10**7)
 
 parser = argparse.ArgumentParser(description='inference script')
 parser.add_argument('--recon_dir', type=str,
-                    default='/home/x903102883/2017EXBB/PF_inf/pf/axonal2/opt_test/',
+                    default='/home/x903102883/2017EXBB/inference_agglomeration_test/shubhra_test2/test/',
                     help='input images')
-parser.add_argument('--merge_ratio', type=float, default=0.2, help='input images')
-parser.add_argument('--vox_thr', type=int, default=50, help='input images')
-parser.add_argument('--RGB', type=bool, default=False, help='generate RGB')
-parser.add_argument('--image_shape', default=(160, 500, 500), help='generate RGB')
+parser.add_argument('--merge_ratio', type=float, default=0.1, help='input images')
+parser.add_argument('--vox_thr', type=int, default=10, help='input images')
+parser.add_argument('--RGB', type=bool, default=True, help='generate RGB')
+parser.add_argument('--image_shape', default=(160, 128, 128), help='generate RGB')
 
 args = parser.parse_args()
 

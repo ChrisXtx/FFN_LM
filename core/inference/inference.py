@@ -276,13 +276,13 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
         coord = (rel_pos + self.deltas // 2) // np.maximum(self.deltas, 1)
         return tuple(coord)
 
-    def update(self, prob_map, position):
+    def update(self, prob_map, position, flex):
         """Adds movements to queue for the cuboid face maxima of ``prob_map``."""
         qpos = self.quantize_pos(position)
         self.done_rounded_coords.add(qpos)
 
         scored_coords = get_scored_move_offsets(self.deltas, prob_map,
-                                                threshold=self.score_threshold, flex_faces=1)
+                                                threshold=self.score_threshold, flex_faces=flex)
         scored_coords = sorted(scored_coords, reverse=True)
         for score, rel_coord in scored_coords:
             # convert to whole cube coordinates
@@ -292,7 +292,7 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
 
 class Canvas(object):
 
-    def __init__(self, model, images, size, delta, seg_thr, mov_thr, act_thr, re_seg_thr, vox_thr, data_save_path,
+    def __init__(self, model, images, size, delta, seg_thr, mov_thr, act_thr, flex_faces, re_seg_thr, vox_thr, data_save_path,
                  re_segd_count_mask, save_chunk, resume_seed, manual_seed, process_id):
 
         
@@ -309,6 +309,7 @@ class Canvas(object):
         self.seg_thr = logit(seg_thr)
         self.mov_thr = logit(mov_thr)
         self.act_thr = logit(act_thr)
+        self.flex_faces = flex_faces
         self.re_seg_thr = re_seg_thr
 
         self.data_save_path = data_save_path
@@ -525,7 +526,7 @@ class Canvas(object):
             
                 """update_movable_location"""
 
-                self.movement_policy.update(pred, pos)
+                self.movement_policy.update(pred, pos, flex = self.flex_faces)
                 assert np.all(pred.shape == self.input_size)
 
             try:
