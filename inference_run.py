@@ -27,7 +27,7 @@ parser.add_argument('--data_save', type=str,
 
 parser.add_argument('--save_chunk', type=int, default=5000, help='separate the seg_coords from seeds by chunk')
 parser.add_argument('--resume_seed', type=int, default=0, help='resume_seed')
-parser.add_argument('--tag', type=str, default='whole_par4', help='tag the files')
+parser.add_argument('--tag', type=str, default='test', help='tag the files')
 
 
 parser.add_argument('--threads', type=int, default=1, help='tag the files')
