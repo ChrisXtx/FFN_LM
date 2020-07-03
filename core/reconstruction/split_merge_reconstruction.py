@@ -162,7 +162,7 @@ def segs_to_RGB(segmented_mask):
     :return: RGB segmentation
     """
     ids = np.unique(segmented_mask)
-    layer = np.zeros(segmented_mask.shape, dtpye='uint8')
+    layer = np.zeros(segmented_mask.shape).astype('uint8')
     RGB_img = np.stack((layer,) * 3, axis=-1)
 
     for id in ids:
