@@ -8,7 +8,6 @@ import random
 import numpy as np
 
 
-
 class BatchCreator(data.Dataset):
 
     def __init__(
@@ -56,29 +55,31 @@ class BatchCreator(data.Dataset):
         self.num_classes = 2
         self.reset = True
 
-
-    def parse_h5py(self, input):
-        """解析数据"""
-        for input_data in input:
-            with h5py.File(input_data, 'r') as raw:
-                self.input_data.append(raw['image'][()] ) #.astype(np.float32)-128) / 33.0)
+    def parse_h5py(self, h5_file):
+        """load training data"""
+        for data in h5_file:
+            with h5py.File(data, 'r') as raw:
+                self.input_data.append(raw['image'][()] )  #.astype(np.float32)-128) / 33.0)
                 self.label_data.append(raw['label'][()])
-                self.coor.append(raw['coor'][()]) #.astype(np.uint8))
+                self.coor.append(raw['coor'][()])   #.astype(np.uint8))
                 self.seed.append(logit(np.full(list(raw['label'][()].shape), 0.05, dtype=np.float32)))
 
     def __getitem__(self, idx):
 
         self.coor_patch = self.coor[self.data_idx][idx]
+
+        # crop the training patch from datasets (size:input_size + delta * 2)
         self.image_patch = center_crop_and_pad(self.input_data[self.data_idx], self.coor_patch, self.seed_shape)
         self.label_patch = center_crop_and_pad(self.label_data[self.data_idx], self.coor_patch, self.seed_shape)
 
+        # transformations
         self.image_patch, self.label_patch = geometric_transform(self.image_patch, self.label_patch)
         self.image_patch =((self.image_patch.astype(np.float32) - 128) / 33.0)
         self.image_patch = self.image_patch.transpose(3, 0, 1, 2)
 
+        # seed layer (POM) init
         self.label_patch = np.logical_and(self.label_patch > 0, np.equal(self.label_patch, self.label_patch[tuple(self.label_radii)]))
         self.label_patch = np.where(self.label_patch, np.ones(self.label_patch.shape)*0.95, np.ones(self.label_patch.shape)*0.05)
-
         self.seed_patch = center_crop_and_pad(self.seed[self.data_idx], self.coor_patch, self.seed_shape)
         self.seed_patch[tuple(self.label_radii)] = logit(0.95)
 

@@ -18,20 +18,18 @@ from core.tool.tools import *
 from core.data.utils import *
 import os
 
-
 parser = argparse.ArgumentParser(description='Train a network.')
 
-# laod  and  save
 parser.add_argument('--deterministic', action='store_true',
                     help='Run in fully deterministic mode (at the cost of execution speed).')
-
+# load_and_save
 parser.add_argument('-train_data', '--train_data_dir', type=str,
                     default='/home/x903102883/2017EXBB/train_data_downsample_2_bound24/train_sample/',
                     help='training data')
 
 parser.add_argument('--resume', type=str,
                     default='/home/x903102883/FFN_LM_v0.2/model/down_2_adamffn_model_fov:39_delta:4_depth:26_recall93.56709552696488.pth',
-                    help='resume training')
+                    help='resume model')
 
 parser.add_argument('--save_path', type=str,
                     default='/home/x903102883/FFN_LM_v0.2/model/',
@@ -47,7 +45,6 @@ parser.add_argument('--delta', default=(4, 4, 4), help='delta offset')
 parser.add_argument('--input_size', default=(39, 39, 39), help='input size')
 parser.add_argument('--opt', default='Adam', help='optimizer')
 
-
 parser.add_argument('--tb', type=str, default=None, help='path_of_tensorboard')
 parser.add_argument('--resume_step', type=int, default=0, help='start_step_of_tb')
 parser.add_argument('--iter', type=int, default=1e100, help='training iteration')
@@ -56,10 +53,9 @@ parser.add_argument('--iter', type=int, default=1e100, help='training iteration'
 parser.add_argument('--clip_grad_thr', type=float, default=0.7, help='grad clip threshold')
 parser.add_argument('--interval', type=int, default=120, help='How often to save model (in seconds).')
 parser.add_argument('--gamma', type=float, default=0.9, help='multiplicative factor of learning rate decay')
-parser.add_argument('--step', type=int, default=1e5*5, help='adjust learning rate every step')
+parser.add_argument('--step', type=int, default=1e5 * 5, help='adjust learning rate every step')
 
 args = parser.parse_args()
-
 
 deterministic = args.deterministic
 
@@ -72,12 +68,11 @@ if not os.path.exists(args.save_path):
     os.makedirs(args.save_path)
 
 
-
 def run():
-    """model_construction"""
+    """model init"""
     model = FFN(in_channels=4, out_channels=1, input_size=args.input_size, delta=args.delta, depth=args.depth).cuda()
 
-    """data_load"""
+    """model resume"""
     if args.resume is not None:
         model.load_state_dict(torch.load(args.resume))
 
@@ -88,49 +83,47 @@ def run():
     args.resume_step = resume['resume_step']
     print('resume_step', args.resume_step)
 
-    if args.tb == None:
-        tb = SummaryWriter('./tensorboard/'+args.tag+'tb_train_log_fov:{}_delta:{}_depth:{}.pth'
-                       .format(list(args.input_size)[0], list(args.delta)[0], args.depth))
+    if args.tb is None:
+        tb = SummaryWriter('./tensorboard/' + args.tag + 'tb_train_log_fov:{}_delta:{}_depth:{}.pth'
+                           .format(list(args.input_size)[0], list(args.delta)[0], args.depth))
     else:
         tb = SummaryWriter(args.tb)
 
     sorted_files_train_data = sort_files(args.train_data_dir)
     files_total = len(sorted_files_train_data)
-
     input_h5data_dict = {}
     train_dataset_dict = {}
     train_loader_dict = {}
     batch_it_dict = {}
-
     for index in range(files_total):
         input_h5data_dict[index] = [(args.train_data_dir + sorted_files_train_data[index])]
-        train_dataset_dict[index] = BatchCreator(input_h5data_dict[index], args.input_size, delta=args.delta,
-                                                 train=True)
+        train_dataset_dict[index] = BatchCreator(input_h5data_dict[index], args.input_size, delta=args.delta,train=True)
         train_loader_dict[index] = DataLoader(train_dataset_dict[index], shuffle=True, num_workers=0, pin_memory=True)
         batch_it_dict[index] = get_batch(train_loader_dict[index], args.batch_size, args.input_size,
                                          partial(fixed_offsets, fov_moves=train_dataset_dict[index].shifts))
 
     """optimizer"""
-    t_last = time.time()
-    cnt = 0
-    tp = fp = tn = fn = 0
-
-    best_loss = np.inf
     if args.opt == 'Adam':
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
     else:
         optimizer = optim.SGD(model.parameters(), lr=1e-3)
-
     # optimizer = adabound.AdaBound(model.parameters(), lr=1e-3, final_lr=0.1)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step, gamma=args.gamma, last_epoch=-1)
 
     """train_loop"""
+    t_last = time.time()
+    cnt = 0
+    tp = fp = tn = fn = 0
+    best_loss = np.inf
     while cnt < args.iter:
         cnt += 1
+
+        # record training iter every 1000
         if cnt % 1000 == 0:
             resume['resume_step'] = cnt + args.resume_step
             pickle_obj(resume, 'resume_step', args.save_path)
 
+        # load training data (random)
         train_num = len(input_h5data_dict)
         index_rand = random.randrange(0, train_num, 1)
         seeds, images, labels, offsets = next(batch_it_dict[index_rand])
@@ -147,8 +140,7 @@ def run():
         optimizer.zero_grad()
         loss = F.binary_cross_entropy_with_logits(updated, labels)
         loss.backward()
-
-        # torch.nn.utils.clip_grad_value_(model.parameters(), args.clip_grad_thr)
+        #torch.nn.utils.clip_grad_value_(model.parameters(), args.clip_grad_thr)
         optimizer.step()
 
         seeds[...] = updated.detach().cpu().numpy()
@@ -178,13 +170,14 @@ def run():
             input_size_r = list(args.input_size)
             delta_r = list(args.delta)
             torch.save(model.state_dict(), os.path.join(args.save_path, (
-                        str(args.tag) + 'ffn_model_fov:{}_delta:{}_depth:{}.pth'.format(input_size_r[0],
-                                                                                                    delta_r[0],
-                                                                                                  args.depth))))
+                    str(args.tag) + 'ffn_model_fov:{}_delta:{}_depth:{}.pth'.format(input_size_r[0],
+                                                                                    delta_r[0],
+                                                                                    args.depth))))
             torch.save(model.state_dict(), os.path.join(args.save_path, (
                     str(args.tag) + 'ffn_model_fov:{}_delta:{}_depth:{}_recall{}_.pth'.format(input_size_r[0],
-                                                                                       delta_r[0],
-                                                                                       args.depth,recall*100))))
+                                                                                              delta_r[0],
+                                                                                              args.depth,
+                                                                                              recall * 100))))
 
             print('Precision: {:.2f}%, Recall: {:.2f}%, Accuracy: {:.2f}%, Model saved!'.format(
                 precision * 100, recall * 100, accuracy * 100))
@@ -206,8 +199,6 @@ if __name__ == "__main__":
 
 
 
-
-
 """model_saving_(best_loss)"""
 """
         if best_loss > loss.item() or t_curr - t_last > args.interval:
@@ -223,4 +214,3 @@ if __name__ == "__main__":
             print('Precision: {:.2f}%, Recall: {:.2f}%, Accuracy: {:.2f}%, Model saved!'.format(
                 precision * 100, recall * 100, accuracy * 100))
 """
-

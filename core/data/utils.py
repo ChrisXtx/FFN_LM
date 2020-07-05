@@ -156,3 +156,6 @@ def get_batch(loader, batch_size, shape, get_offsets):
 
         for i in range(batch_size):
             seeds[i][:] = batched_seeds[i, ...]
+
+
+

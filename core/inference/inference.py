@@ -3,7 +3,6 @@ import sys
 from scipy.special import expit
 from scipy.special import logit
 import torch
-import six
 import numpy as np
 from scipy import ndimage
 import random
@@ -15,8 +14,7 @@ from collections import deque
 import time
 from torch.autograd import Variable
 import cv2
-import skimage
-from scipy.stats import stats
+import skimage.io
 import os
 import h5py
 import threading
@@ -121,6 +119,8 @@ def get_scored_move_offsets(deltas, prob_map, flex_faces, threshold=0.8):
         for flex in range(flex_faces):
             if flex == 0:
                 continue
+
+            # TODO: define movable faces
             if (deltas[0] % flex * 2) != 0:
                 deltas_down = (deltas + (deltas[0] % flex * 2)) / flex * 2
             else:
@@ -188,7 +188,7 @@ class BaseMovementPolicy(object):
           scored_coords: mutable container of tuples (score, zyx coord)
           deltas: step sizes as (z,y,x)
         """
-        # TODO(mjanusz): Remove circular reference between Canvas and seed policies.
+        # TODO: Remove circular reference between Canvas and seed policies.
         self.canvas = weakref.proxy(canvas)
         self.scored_coords = scored_coords
         self.deltas = np.array(deltas)
@@ -293,11 +293,8 @@ class FaceMaxMovementPolicy(BaseMovementPolicy):
 class Canvas(object):
 
     def __init__(self, model, images, size, delta, seg_thr, mov_thr, act_thr, flex_faces, re_seg_thr, vox_thr, data_save_path,
-                 re_segd_count_mask, save_chunk, resume_seed, manual_seed, process_id):
+                 re_seg_mask, save_chunk, resume_seed, manual_seed, process_id):
 
-        
-        
-        
         self.process_id = process_id
         self.manual_seed = manual_seed
         self.model = model
@@ -314,11 +311,10 @@ class Canvas(object):
 
         self.data_save_path = data_save_path
         self.save_count = 1
-        self.re_segd_count_mask = re_segd_count_mask
+        self.re_seg_mask = re_seg_mask
         self.save_chunk = save_chunk
         self.resume_seed = resume_seed
         self.save_part = 1 + int(self.resume_seed / self.save_chunk)
-
 
         self.seed = np.zeros(self.shape, dtype=np.float32)
         self.seg_prob_i = np.zeros(self.shape, dtype=np.uint8)  # temp save out (pred mask) for each step
@@ -395,21 +391,20 @@ class Canvas(object):
 
         # selector = [slice(s, e) for s, e in zip(start, end)]
 
+        # crop the raw image as input
         images_pred = self.images[start[0]:end[0], start[1]:end[1], start[2]:end[2], :]
         images_pred = images_pred.transpose(3, 0, 1, 2)
-
         seeds = self.seed[start[0]:end[0], start[1]:end[1], start[2]:end[2]].copy()
+
         init_prediction = np.isnan(seeds)
         seeds[init_prediction] = np.float32(logit(0.05))
         images_pred = torch.from_numpy(images_pred).float().unsqueeze(0)
         seeds = torch.from_numpy(seeds).float().unsqueeze(0).unsqueeze(0)
 
-        # slice = seeds[:, :, seeds.shape[2] // 2, :, :].sigmoid()
-        # seeds[:, :, seeds.shape[2] // 2, :, :] = slice
-
         input_data = torch.cat([images_pred, seeds], dim=1)
         input_data = Variable(input_data.cuda())
 
+        # model inference
         logits = self.model(input_data)
         updated = (seeds.cuda() + logits).detach().cpu().numpy()
         # update_seed(updated, self.seed, self.model, pos)
@@ -470,12 +465,11 @@ class Canvas(object):
     def segment_at(self, start_pos, id, tag):
         t_lock = threading.Lock()
 
-
         try:
             if not self.is_valid_pos(start_pos, ignore_move_threshold=True):
                 return
-
-            if self.re_segd_count_mask[start_pos] >= self.re_seg_thr:
+            # check if the seed location have been segmented many times
+            if self.re_seg_mask[start_pos] >= self.re_seg_thr:
                 print('skip', id)
                 return
 
@@ -503,31 +497,23 @@ class Canvas(object):
                 """stepping"""
                 pred, sel_i = self.update_at(pos)
                 step_iter += 1
-                print('id',id,step_iter)
-
+                print('id', id, step_iter)
                 sel_i_s = sel_i  # updated_cube_fov_size
 
-                
-                
-                # single_seed
+                # manuel seed: save_image out each step
                 if self.manual_seed:
-                    if not os.path.exists('./data/'):
-                        os.makedirs('./data/')
+                    if not os.path.exists('./manuel_seed_data/'):
+                        os.makedirs('./manuel_seed_data/')
                     try:
                         mask = self.seed[tuple(sel_i_s)] >= self.seg_thr
                         self.seg_prob_i[tuple(sel_i_s)][mask] = quantize_probability(expit(self.seed[tuple(sel_i_s)][mask]))
                     except RuntimeError:
                         return False
-                    # save the pred_mask out for each step
+                    # save the predicted mask out for each step
                     skimage.io.imsave('./data/FFN_object_inf_{}_step{}.tif'.format(id, step_iter), self.seg_prob_i)
-                
-            
-            
-            
-            
-                """update_movable_location"""
 
-                self.movement_policy.update(pred, pos, flex = self.flex_faces)
+                """update valid locations for movement"""
+                self.movement_policy.update(pred, pos, flex=self.flex_faces)
                 assert np.all(pred.shape == self.input_size)
 
             try:
@@ -538,23 +524,24 @@ class Canvas(object):
 
             mask_seg_prob_i = (self.seg_prob_i >= 128)
             if np.sum(mask_seg_prob_i) >= self.vox_thr:
-
-                self.re_segd_count_mask[mask_seg_prob_i] += 1
+                self.re_seg_mask[mask_seg_prob_i] += 1
 
                 # save segmentation from each seed
-                seg_prob_coords = np.argwhere(mask_seg_prob_i).astype('int16')
 
+                seg_prob_coords = np.argwhere(mask_seg_prob_i).astype('int16')
                 t_lock.acquire()
                 self.save_count += 1
                 id_save = '{}'.format(id)
                 print('self.save_count', self.save_count, "process id", self.process_id)
 
+                # save the segmentation by part
                 if self.save_count % self.save_chunk == 0:
                     self.save_part += 1
 
+                # update re_seg_mask
                 if self.save_count % 2000 == 0:
-                    skimage.io.imsave(self.data_save + 're_segd_count_mask.tif',
-                                      self.re_segd_count_mask.astype('uint8'))
+                    skimage.io.imsave(self.data_save + 're_seg_mask.tif',
+                                      self.re_seg_mask.astype('uint8'))
 
                 print("segmentation saved! seed:", id, "coord:", start_pos, "completed_num:", self.save_count)
                 try:
