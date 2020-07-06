@@ -44,7 +44,7 @@ parser.add_argument('--tag', type=str, default="ddl_hvd_SGD", help='tag')
 parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=42, metavar='S', help='random seed (default: 42)')
 parser.add_argument('--fp16-allreduce', action='store_true', default=False, help='use fp16 compression during allreduce')
-parser.add_argument('--use-adasum', action='store_true', default=True, help='use adasum algorithm to do reduction')
+parser.add_argument('--use-adasum', action='store_true', default=False, help='use adasum algorithm to do reduction')
 
 
 # training parameters
