@@ -162,11 +162,42 @@ def run():
         input_h5data_dict[index] = [(args.train_data_dir + sorted_files_train_data[index])]
         train_dataset_dict[index] = BatchCreator(input_h5data_dict[index], args.input_size, delta=args.delta,
                                                  train=True)
-        train_loader_dict[index] = DataLoader(train_dataset_dict[index], shuffle=True, num_workers=0, pin_memory=True)
+        
+        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+        # When supported, use 'forkserver' to spawn dataloader workers instead of 'fork' to prevent
+        # issues with Infiniband implementations that are not fork-safe
+        if (kwargs.get('num_workers', 0) > 0 and hasattr(mp, '_supports_context') and
+                mp._supports_context and 'forkserver' in mp.get_all_start_methods()):
+            kwargs['multiprocessing_context'] = 'forkserver'
+
+        # Horovod: use DistributedSampler to partition the training data.
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+            train_dataset_dict[index], num_replicas=hvd.size(), rank=hvd.rank())
+        train_loader_dict[index] = torch.utils.data.DataLoader(
+            train_dataset_dict[index], sampler=train_sampler, **kwargs)
+        
+        
         batch_it_dict[index] = get_batch(train_loader_dict[index], args.batch_size, args.input_size,
                                          partial(fixed_offsets, fov_moves=train_dataset_dict[index].shifts))
 
-  
+    """
+    
+    for index in range(files_total):
+        input_h5data_dict[index] = [(abs_path_training_data + sorted_files_train_data[index])]
+        print(input_h5data_dict[index])
+        train_dataset_dict[index] = BatchCreator(input_h5data_dict[index], args.input_size, delta=args.delta, train=True)
+        train_sampler_dict[index] = torch.utils.data.distributed.DistributedSampler(train_dataset_dict[index], num_replicas=world_size, rank=rank, shuffle=True)
+        train_loader_dict[index] = DataLoader(train_dataset_dict[index], num_workers=0, sampler=train_sampler_dict[index] , pin_memory=True)
+        batch_it_dict[index] = get_batch(train_loader_dict[index], args.batch_size, args.input_size,
+                               partial(fixed_offsets, fov_moves=train_dataset_dict[index].shifts))
+    """
+
+    
+    
+    
+    
+    
+    
     
     """optimizer"""
     """
