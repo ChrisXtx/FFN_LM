@@ -147,7 +147,7 @@ def run():
 
         seeds[...] = updated.detach().cpu().numpy()
 
-        pred_mask = (updated >= logit(0.9)).detach().cpu().numpy()
+        pred_mask = (updated >= logit(0.8)).detach().cpu().numpy()
         true_mask = (labels > 0.5).cpu().numpy()
         true_bg = np.logical_not(true_mask)
         pred_bg = np.logical_not(pred_mask)
@@ -194,8 +194,7 @@ def run():
 
 
 if __name__ == "__main__":
-    seed = int(time.time())
-    random.seed(seed)
+    
 
     run()
 
