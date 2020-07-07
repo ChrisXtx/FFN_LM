@@ -230,7 +230,7 @@ def run():
         random.seed(30)
         index_rand = random.randrange(0, train_num, 1)
         seeds, images, labels, offsets = next(batch_it_dict[index_rand])
-        
+        print(input_h5data_dict[index])
         
         # train
         t_curr = time.time()
@@ -253,21 +253,21 @@ def run():
         
         
         
-        if hvd.rank() == 0 :
+
           
-          pred_mask = (updated >= logit(0.8)).detach().cpu().numpy()
-          true_mask = (labels > 0.5).cpu().numpy()
-          true_bg = np.logical_not(true_mask)
-          pred_bg = np.logical_not(pred_mask)
-          tp += (true_mask & pred_mask).sum()
-          fp += (true_bg & pred_mask).sum()
-          fn += (true_mask & pred_bg).sum()
-          tn += (true_bg & pred_bg).sum()
-          precision = 1.0 * tp / max(tp + fp, 1)
-          recall = 1.0 * tp / max(tp + fn, 1)
-          accuracy = 1.0 * (tp + tn) / (tp + tn + fp + fn)
-          print('[Iter_{}:, loss: {:.4}, Precision: {:.2f}%, Recall: {:.2f}%, Accuracy: {:.2f}%]\r'.format(
-              cnt, loss.item(), precision * 100, recall * 100, accuracy * 100))
+        pred_mask = (updated >= logit(0.8)).detach().cpu().numpy()
+        true_mask = (labels > 0.5).cpu().numpy()
+        true_bg = np.logical_not(true_mask)
+        pred_bg = np.logical_not(pred_mask)
+        tp += (true_mask & pred_mask).sum()
+        fp += (true_bg & pred_mask).sum()
+        fn += (true_mask & pred_bg).sum()
+        tn += (true_bg & pred_bg).sum()
+        precision = 1.0 * tp / max(tp + fp, 1)
+        recall = 1.0 * tp / max(tp + fn, 1)
+        accuracy = 1.0 * (tp + tn) / (tp + tn + fp + fn)
+        print('[rank_{}:, Iter_{}:, loss: {:.4}, Precision: {:.2f}%, Recall: {:.2f}%, Accuracy: {:.2f}%]\r'.format(hvd.rank(),
+            cnt, loss.item(), precision * 100, recall * 100, accuracy * 100))
 
         # scheduler.step()
 
