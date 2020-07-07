@@ -216,7 +216,7 @@ def run():
     best_loss = np.inf
     
     model.train()
-    
+    train_num = len(input_h5data_dict)
     while cnt < args.iter:
         cnt += 1
         
@@ -224,11 +224,9 @@ def run():
         if cnt % 1000 == 0:
             resume['resume_step'] = cnt + args.resume_step
             pickle_obj(resume, 'resume_step', args.save_path)
-
             
-        train_num = len(input_h5data_dict)
-        index_rand = random.randrange(0, train_num, 1)
-        seeds, images, labels, offsets = next(batch_it_dict[index_rand])
+        index_batch = (cnt % train_num)
+        seeds, images, labels, offsets = next(batch_it_dict[index_batch])
         print(input_h5data_dict[index])
         
         # train
