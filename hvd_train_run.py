@@ -227,7 +227,7 @@ def run():
             
         index_batch = (cnt % train_num)
         seeds, images, labels, offsets = next(batch_it_dict[index_batch])
-        print(input_h5data_dict[index])
+        print(input_h5data_dict[index_batch])
         
         # train
         t_curr = time.time()
