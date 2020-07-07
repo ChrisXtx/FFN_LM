@@ -172,7 +172,7 @@ def run():
 
         # Horovod: use DistributedSampler to partition the training data.
         train_sampler = torch.utils.data.distributed.DistributedSampler(
-            train_dataset_dict[index], num_replicas=hvd.size(), rank=hvd.rank(),shuffle=False)
+            train_dataset_dict[index], num_replicas=hvd.size(), rank=hvd.rank())
         train_loader_dict[index] = torch.utils.data.DataLoader(
             train_dataset_dict[index], shuffle=True, sampler=train_sampler, **kwargs)
         
