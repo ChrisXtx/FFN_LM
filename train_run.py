@@ -176,9 +176,9 @@ def run():
                                                                                     delta_r[0],
                                                                                     args.depth))))
             torch.save(model.state_dict(), os.path.join(args.save_path, (
-                    str(args.tag) + 'ffn_model_fov:{}_delta:{}_depth:{}_recall{}_.pth'.format(input_size_r[0],
+                    str(args.tag) + 'ffn_model_fov:{}_delta:{}_depth:{}_pre{}_recall{}_.pth'.format(input_size_r[0],
                                                                                               delta_r[0],
-                                                                                              args.depth,
+                                                                                              args.depth, precision * 100,
                                                                                               recall * 100))))
 
             print('Precision: {:.2f}%, Recall: {:.2f}%, Accuracy: {:.2f}%, Model saved!'.format(
