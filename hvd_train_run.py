@@ -174,7 +174,7 @@ def run():
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset_dict[index], num_replicas=hvd.size(), rank=hvd.rank(),shuffle=False)
         train_loader_dict[index] = torch.utils.data.DataLoader(
-            train_dataset_dict[index], sampler=train_sampler, **kwargs)
+            train_dataset_dict[index], shuffle=True, sampler=train_sampler, **kwargs)
         
         
         batch_it_dict[index] = get_batch(train_loader_dict[index], args.batch_size, args.input_size,
