@@ -227,10 +227,19 @@ def run():
             resume['resume_step'] = cnt + args.resume_step
             pickle_obj(resume, 'resume_step', args.save_path)
             
+        """
         index_batch = (cnt % train_num)
         train_sampler_dict[index_batch].set_epoch(cnt)
         seeds, images, labels, offsets = next(batch_it_dict[index_batch])
         print(input_h5data_dict[index_batch])
+        """
+        
+        index_rand = random.randrange(0, train_num, 1)
+        train_sampler_dict[index_rand].set_epoch(cnt)
+        seeds, images, labels, offsets = next(batch_it_dict[index_rand])
+        print(input_h5data_dict[index_rand])
+        
+        
         
         # train
         t_curr = time.time()
