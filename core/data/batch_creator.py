@@ -67,7 +67,7 @@ class BatchCreator(data.Dataset):
     def __getitem__(self, idx):
 
         self.coor_patch = self.coor[self.data_idx][idx]
-
+        print(self.coor_patch,idx)
         # crop the training patch from datasets (size:input_size + delta * 2)
         self.image_patch = center_crop_and_pad(self.input_data[self.data_idx], self.coor_patch, self.seed_shape)
         self.label_patch = center_crop_and_pad(self.label_data[self.data_idx], self.coor_patch, self.seed_shape)
