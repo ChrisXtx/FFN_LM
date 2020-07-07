@@ -157,7 +157,9 @@ def run():
     train_dataset_dict = {}
     train_loader_dict = {}
     batch_it_dict = {}
-
+    train_sampler_dict = {}
+    
+    
     for index in range(files_total):
         input_h5data_dict[index] = [(args.train_data_dir + sorted_files_train_data[index])]
         train_dataset_dict[index] = BatchCreator(input_h5data_dict[index], args.input_size, delta=args.delta,
@@ -171,10 +173,10 @@ def run():
             kwargs['multiprocessing_context'] = 'forkserver'
 
         # Horovod: use DistributedSampler to partition the training data.
-        train_sampler = torch.utils.data.distributed.DistributedSampler(
+        train_sampler_dict[index] = torch.utils.data.distributed.DistributedSampler(
             train_dataset_dict[index], num_replicas=hvd.size(), rank=hvd.rank())
         train_loader_dict[index] = torch.utils.data.DataLoader(
-            train_dataset_dict[index], sampler=train_sampler, **kwargs)
+            train_dataset_dict[index], sampler=train_sampler_dict[index], **kwargs)
         
         
         batch_it_dict[index] = get_batch(train_loader_dict[index], args.batch_size, args.input_size,
@@ -226,6 +228,7 @@ def run():
             pickle_obj(resume, 'resume_step', args.save_path)
             
         index_batch = (cnt % train_num)
+        train_sampler_dict[index_batch].set_epoch(cnt)
         seeds, images, labels, offsets = next(batch_it_dict[index_batch])
         print(input_h5data_dict[index_batch])
         
