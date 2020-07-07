@@ -43,7 +43,7 @@ parser.add_argument('--lr', type=float, default=1e-4, help='training learning ra
 parser.add_argument('--depth', type=int, default=26, help='depth of ffn')
 parser.add_argument('--delta', default=(4, 4, 4), help='delta offset')
 parser.add_argument('--input_size', default=(39, 39, 39), help='input size')
-parser.add_argument('--opt', default='Adam', help='optimizer')
+parser.add_argument('--opt', default='sgd', help='optimizer')
 
 parser.add_argument('--tb', type=str, default=None, help='path_of_tensorboard')
 parser.add_argument('--resume_step', type=int, default=0, help='start_step_of_tb')
@@ -127,7 +127,9 @@ def run():
         train_num = len(input_h5data_dict)
         index_rand = random.randrange(0, train_num, 1)
         seeds, images, labels, offsets = next(batch_it_dict[index_rand])
-
+        print(input_h5data_dict[index])
+        
+        
         t_curr = time.time()
         labels = labels.cuda()
         torch_seed = torch.from_numpy(seeds)
