@@ -34,7 +34,7 @@ parser.add_argument('--resume', type=str,
 parser.add_argument('--save_path', type=str,
                     default='/home/x903102883/FFN_LM_v0.2/model/',
                     help='model save path')
-parser.add_argument('--save_interval', type=str, default=2000, help='model save interval')
+parser.add_argument('--save_interval', type=int, default=2000, help='model save interval')
 parser.add_argument('--tag', type=str, default="down_2_adam", help='tag')
 
 # training parameters
