@@ -28,7 +28,7 @@ parser.add_argument('-train_data', '--train_data_dir', type=str,
                     help='training data')
 
 parser.add_argument('--resume', type=str,
-                    default='/home/x903102883/FFN_LM_v0.2/model/down_2_adamffn_model_fov:39_delta:4_depth:26_recall93.56709552696488.pth',
+                    default=None,
                     help='resume model')
 
 parser.add_argument('--save_path', type=str,
