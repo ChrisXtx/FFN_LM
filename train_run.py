@@ -127,7 +127,7 @@ def run():
         train_num = len(input_h5data_dict)
         index_rand = random.randrange(0, train_num, 1)
         seeds, images, labels, offsets = next(batch_it_dict[index_rand])
-        print(input_h5data_dict[index])
+        print(input_h5data_dict[index_rand])
         
         
         t_curr = time.time()
