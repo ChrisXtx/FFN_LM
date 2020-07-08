@@ -39,7 +39,7 @@ parser.add_argument('--mov_thr', type=float, default=0.7, help='movable thr')
 parser.add_argument('--act_thr', type=float, default=0.8, help='activation of seg')
 parser.add_argument('--flex', type=int, default=2, help='flexibility of the movement policy')
 parser.add_argument('--re_seg_thr', type=int, default=10, help='threshold for ')
-parser.add_argument('--vox_thr', type=int, default=50, help='remove if too small')
+parser.add_argument('--vox_thr', type=int, default=10, help='remove if too small')
 parser.add_argument('--manual_seed', type=bool, default=False, help='specify the seeds source')
 
 args = parser.parse_args()
