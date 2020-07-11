@@ -9,7 +9,7 @@ from torch import optim
 from torch.autograd import Variable
 import torch.nn.functional as F
 import numpy as np
-from core.models.ffn import FFN
+from core.models.ffn_no_norm import FFN_no_norm
 from core.data import BatchCreator
 from scipy.special import expit
 from scipy.special import logit
@@ -98,7 +98,7 @@ def run():
     torch.set_num_threads(1)
   
     """model_init"""
-    model = FFN(in_channels=4, out_channels=1, input_size=args.input_size, delta=args.delta, depth=args.depth)
+    model = FFN_no_norm(in_channels=4, out_channels=1, input_size=args.input_size, delta=args.delta, depth=args.depth)
   
     #hvd ddl
     # By default, Adasum doesn't need scaling up learning rate.
@@ -150,48 +150,39 @@ def run():
         tb = SummaryWriter(args.tb)
         
     """data_load"""
-    sorted_files_train_data = sort_files(args.train_data_dir)
-    files_total = len(sorted_files_train_data)
 
-    input_h5data_dict = {}
-    train_dataset_dict = {}
-    train_loader_dict = {}
-    batch_it_dict = {}
-    train_sampler_dict = {}
     
     
-    for index in range(files_total):
-        input_h5data_dict[index] = [(args.train_data_dir + sorted_files_train_data[index])]
-        train_dataset_dict[index] = BatchCreator(input_h5data_dict[index], args.input_size, delta=args.delta,
-                                                 train=True)
-        
-        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
-        # When supported, use 'forkserver' to spawn dataloader workers instead of 'fork' to prevent
-        # issues with Infiniband implementations that are not fork-safe
-        if (kwargs.get('num_workers', 0) > 0 and hasattr(mp, '_supports_context') and
-                mp._supports_context and 'forkserver' in mp.get_all_start_methods()):
-            kwargs['multiprocessing_context'] = 'forkserver'
 
-        # Horovod: use DistributedSampler to partition the training data.
-        train_sampler_dict[index] = torch.utils.data.distributed.DistributedSampler(
-            train_dataset_dict[index], num_replicas=hvd.size(), rank=hvd.rank())
-        train_loader_dict[index] = torch.utils.data.DataLoader(
-            train_dataset_dict[index], sampler=train_sampler_dict[index], **kwargs)
-        
-        
-        batch_it_dict[index] = get_batch(train_loader_dict[index], args.batch_size, args.input_size,
-                                         partial(fixed_offsets, fov_moves=train_dataset_dict[index].shifts))
+
+    train_dataset= BatchCreator(args.train_data_dir, args.input_size, delta=args.delta,train=True)
+
+    kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+    # When supported, use 'forkserver' to spawn dataloader workers instead of 'fork' to prevent
+    # issues with Infiniband implementations that are not fork-safe
+    if (kwargs.get('num_workers', 0) > 0 and hasattr(mp, '_supports_context') and
+            mp._supports_context and 'forkserver' in mp.get_all_start_methods()):
+        kwargs['multiprocessing_context'] = 'forkserver'
+
+    # Horovod: use DistributedSampler to partition the training data.
+    train_sampler = torch.utils.data.distributed.DistributedSampler(
+        train_dataset, num_replicas=hvd.size(), rank=hvd.rank())
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, sampler=train_sampler, **kwargs)
+
+    batch_it = get_batch(train_loader, args.batch_size, args.input_size,
+                                     partial(fixed_offsets, fov_moves=train_dataset.shifts))
 
     """
     
     for index in range(files_total):
-        input_h5data_dict[index] = [(abs_path_training_data + sorted_files_train_data[index])]
-        print(input_h5data_dict[index])
-        train_dataset_dict[index] = BatchCreator(input_h5data_dict[index], args.input_size, delta=args.delta, train=True)
-        train_sampler_dict[index] = torch.utils.data.distributed.DistributedSampler(train_dataset_dict[index], num_replicas=world_size, rank=rank, shuffle=True)
-        train_loader_dict[index] = DataLoader(train_dataset_dict[index], num_workers=0, sampler=train_sampler_dict[index] , pin_memory=True)
-        batch_it_dict[index] = get_batch(train_loader_dict[index], args.batch_size, args.input_size,
-                               partial(fixed_offsets, fov_moves=train_dataset_dict[index].shifts))
+        input_h5data_dict = [(abs_path_training_data + sorted_files_train_data)]
+        print(input_h5data_dict)
+        train_dataset_dict = BatchCreator(input_h5data_dict, args.input_size, delta=args.delta, train=True)
+        train_sampler_dict = torch.utils.data.distributed.DistributedSampler(train_dataset_dict, num_replicas=world_size, rank=rank, shuffle=True)
+        train_loader_dict = DataLoader(train_dataset_dict, num_workers=0, sampler=train_sampler_dict , pin_memory=True)
+        batch_it_dict = get_batch(train_loader_dict, args.batch_size, args.input_size,
+                               partial(fixed_offsets, fov_moves=train_dataset_dict.shifts))
     """
 
     
@@ -218,7 +209,7 @@ def run():
     best_loss = np.inf
     
     model.train()
-    train_num = len(input_h5data_dict)
+
     while cnt < args.iter:
         cnt += 1
         
@@ -234,10 +225,10 @@ def run():
         print(input_h5data_dict[index_batch])
         """
         
-        index_rand = random.randrange(0, train_num, 1)
-        train_sampler_dict[index_rand].set_epoch(cnt)
-        seeds, images, labels, offsets = next(batch_it_dict[index_rand])
-        print(input_h5data_dict[index_rand])
+
+        train_sampler.set_epoch(cnt)
+        seeds, images, labels, offsets = next(batch_it)
+
         
         
         

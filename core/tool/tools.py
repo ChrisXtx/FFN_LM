@@ -31,10 +31,10 @@ def load_obj(file_path):
         return pickle.load(f)
 
 
-def load_raw_image(path):
+def load_raw_image(path, group='/image'):
     if path[-2:] == 'h5':
         with h5py.File(path, 'r') as f:
-            images = (f['/image'][()].astype(np.float32) - 128) / 33
+            images = (f[group][()].astype(np.float32) - 128) / 33
     else:
         images = ((skimage.io.imread(path)).astype(np.float32) - 128) / 33
     return images
