@@ -1,19 +1,17 @@
-
-import h5py
+"""Helper functions."""
 import numpy as np
 from pathlib import Path
 import natsort
 import skimage
-import argparse
-from scipy import ndimage
 import pickle
 import h5py
 import os
+from typing import Dict, Tuple, List
+import ast
 
 
-
-
-def sort_files(dir_path):
+def sort_files(dir_path: str) -> List:
+    """Sorts and returns a list of files from a directory path"""
     entries = Path(dir_path)
     files = []
     for entry in entries.iterdir():
@@ -21,18 +19,24 @@ def sort_files(dir_path):
     sorted_files = natsort.natsorted(files, reverse=False)
     return sorted_files
 
-def pickle_obj(obj, name, path ):
-    with open(path + name + '.pkl', 'wb') as f:
+
+def pickle_obj(obj: Dict, name: str, path: str) -> None:
+    """Save dict as a pickle object"""
+    file_path = os.path.join(path, name, '.pkl')
+    with open(file_path, 'wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
 
 
-def load_obj(file_path):
+def load_obj(file_path: str) -> Dict:
+    """Load the pickle object from file_path."""
     with open(file_path, 'rb') as f:
         return pickle.load(f)
 
 
-def load_raw_image(path, group='/image'):
-    if path[-2:] == 'h5':
+def load_raw_image(path: str, group: str = '/image') -> Tuple:
+    """Load the raw image volume."""
+    file_extension = os.path.splitext(path)[1]
+    if file_extension == '.h5':
         with h5py.File(path, 'r') as f:
             images = (f[group][()].astype(np.float32) - 128) / 33
     else:
@@ -40,147 +44,60 @@ def load_raw_image(path, group='/image'):
     return images
 
 
-
-def resume_dict_load(dict_path, name, resume_obj):
-    if os.path.exists(dict_path + name + '.pkl'):
-        resume = load_obj(dict_path + name + '.pkl')
+def resume_dict_load(dict_path: str, name: str, resume_obj: int) -> Dict:
+    """Load dict to resume processing."""
+    dict_path = os.path.join(dict_path, name, '.pkl')
+    if os.path.exists(dict_path):
+        resume = load_obj(dict_path)
     else:
         resume = {'resume_seed': resume_obj}
     resume_obj = resume['resume_seed']
-    print('resume', resume_obj)
+    print(f'Resume {resume_obj}')
     return resume
 
 
-def resume_re_segd_count_mask(path,shape):
-    if os.path.exists(path + 're_seged_count_mask.tif'):
-        re_seged_count_mask = skimage.io.imread(path + 're_seged_count_mask.tif')
+def resume_re_segd_count_mask(file_path: str, shape: Tuple) -> Tuple:
+    """Load mask file if it exists otherwise create a new one."""
+    file_path = os.path.join(file_path, 're_seged_count_mask.tif')
+    if os.path.exists(file_path):
+        re_seged_count_mask = skimage.io.imread(file_path)
     else:
         re_seged_count_mask = np.zeros(shape, dtype=np.uint8)
     return re_seged_count_mask
 
-def seeds_to_dict(seeds_path):
-    inf_seed_dict = {}
-    if os.path.exists(seeds_path):
-        with h5py.File(seeds_path, 'r') as segs:
-            seeds = segs['seeds'][()]
-            seed_id = 1
-            seeds = list(seeds)
-            for coord in seeds:
-                inf_seed_dict[seed_id] = coord
-                seed_id += 1
+
+def load_seeds_from_file(seeds_file_path: str, manual_seed: bool) -> Dict:
+    """
+    Load seeds either from a .h5 (auto generated seeds)
+    or from a .txt (manually specified seeds) file.
+    """
+    seeds = {}
+    if os.path.exists(seeds_file_path):
+        if not manual_seed:
+            with h5py.File(seeds_file_path, 'r') as f:
+                seeds = f['seeds'][()]
+                seeds = list(seeds)
+                seeds = {i + 1: coord for i, coord in enumerate(seeds)}
+        else:
+            # Expects a .txt file of seed coordinates in a Dict format
+            # Each line as {id: [z, y, x]}
+            with open(seeds_file_path, 'r') as f:
+                contents = f.read()
+                seeds = ast.literal_eval(contents)
     else:
-        print("seeds file is not exist")
+        print(f'{seeds_file_path} - seeds file does not exist!')
 
-    return inf_seed_dict
-
-
-
-
-
-
-
-
-
+    return seeds
 
 
 def z_resize_no_inter(data,factor):
+    """TODO: Add function description and type hints."""
     resized = skimage.transform.resize(data,
-                                   (data.shape[0] * factor, data.shape[1], data.shape[2]),
-                                   mode='edge',
-                                   anti_aliasing=False,
-                                   anti_aliasing_sigma=None,
-                                   preserve_range=True,
-                                   order=0)
+                                       (data.shape[0] * factor, data.shape[1],
+                                        data.shape[2]),
+                                       mode='edge',
+                                       anti_aliasing=False,
+                                       anti_aliasing_sigma=None,
+                                       preserve_range=True,
+                                       order=0)
     return resized
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-"""
-def increase_contrast(image):
-    #Uses CLAHE (Contrast Limited Adaptive Histogram Equalization) to increase
-    #the contrast of an image. Found on Stack Overflow, written by Jeru Luke.
-
-    # Converting image to LAB Color model
-    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-
-    # Splitting the LAB image to different channels
-    l, a, b = cv2.split(lab)
-
-    # Applying CLAHE to L-channel---
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    cl = clahe.apply(l)
-
-    # Merge the CLAHE enhanced L-channel with the a and b channel
-    limg = cv2.merge((cl, a, b))
-
-    # Converting image from LAB Color model to RGB model
-    final = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-
-    return final
-
-
-
-def histo_equal(img):
-    '''
-    This function takes an image and performs
-    an adaptive histogram equalization on it
-    for smoother lighting.
-    :param src: The image to be smoothed
-    :type src: str
-    :type src: numpy.ndarray
-    :return:
-    '''
-
-
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-
-    ret = clahe.apply(img)
-
-    return ret
-
-
-def calhe_3d(image):
-    print(image.shape)
-    stack = histo_equal(image[0])
-    stack= np.expand_dims(stack, axis=0)
-    print(stack.shape)
-    for slice in range(image.shape[0]-1):
-        slice_out = histo_equal(image[slice+1])
-        slice_out = np.expand_dims(slice_out, axis=0)
-        stack = np.concatenate((stack,slice_out),axis= 0)
-        print(stack.shape)
-    return stack
-"""
