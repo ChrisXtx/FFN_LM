@@ -108,10 +108,9 @@ def run(args: argparse, canvas: Canvas, seeds: Dict, process_id: int,
     """Run the inference thread for all seeds."""
     resume = tools.resume_dict_load(args.data_save, 'resume_seed',
                                     args.resume_seed)
-    
-    seeds_part = int(len(inf_seed_dict)/process_num)
+
     for seed_id, coord in seeds.items():
-        if (seed_id < (seeds_part*(process_id-1))) | (seed_id > (seeds_part*process_id)):
+        if not seed_id % process_num == process_id:
             continue
         if seed_id < args.resume_seed:
             continue
