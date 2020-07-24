@@ -33,7 +33,7 @@ def load_obj(file_path: str) -> Dict:
         return pickle.load(f)
 
 
-def load_raw_image(path: str, group: str = '/image') -> Tuple:
+def load_raw_image(path: str, group: str = '/image') -> np.ndarray:
     """Load the raw image volume."""
     file_extension = os.path.splitext(path)[1]
     if file_extension == '.h5':
@@ -56,7 +56,7 @@ def resume_dict_load(dict_path: str, name: str, resume_obj: int) -> Dict:
     return resume
 
 
-def resume_re_segd_count_mask(file_path: str, shape: Tuple) -> Tuple:
+def resume_re_segd_count_mask(file_path: str, shape: Tuple) -> np.ndarray:
     """Load mask file if it exists otherwise create a new one."""
     file_path = os.path.join(file_path, 're_seged_count_mask.tif')
     if os.path.exists(file_path):
