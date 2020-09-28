@@ -29,8 +29,10 @@ def sort_files(dir_path):
 
 
 def evaluation(label, pred, file_name):
+    #returns the stats of evluation 
     ids_l, count_l = np.unique(label, return_counts=True)
-    fail_r_p = fail_cnt = fail_r = fail_size = fail_p = t_recall = t_precision = t_f1score = t_obj = small_cnt = 0
+    fail_r_p = fail_cnt = fail_r = fail_size = fail_p = \
+    t_recall = t_precision = t_f1score = t_obj = small_cnt = 0
     recall_list = []
     precision_list = []
     f1score_list = []
@@ -40,16 +42,16 @@ def evaluation(label, pred, file_name):
         gt_id = (label == id_l)
         gt_id_size = np.sum(gt_id)
 
-        # size filter for gt
+        # size filter for objects in gt
         if gt_id_size < args.size_thr:
             small_cnt += 1
             continue
 
-        # find the candidate object in prediction
+        # finding the candidate object in the prediction
         id_stat_pred = stats.mode(pred[gt_id])
         target = id_stat_pred[0][0]
 
-        # excluding zero
+        # excluding zero (background)
         if id_stat_pred[0][0] == 0:
             ctr = Counter(pred[gt_id].ravel())
             try:
@@ -65,7 +67,8 @@ def evaluation(label, pred, file_name):
         recall = np.sum(tp) / gt_id_size
         f1score = 2 * (precision * recall) / (precision + recall)
 
-        if (np.sum(tp) < 400) | (np.sum(tp) < (gt_id_size * 0.25)) | (np.sum(tp) < (positive_size * 0.25)):
+        if (np.sum(tp) < 400) | (np.sum(tp) < (gt_id_size * 0.25)) \
+            | (np.sum(tp) < (positive_size * 0.25)):
             fail_cnt += 1
             f1score = recall = precision = 0
         if np.sum(tp) < 400:
