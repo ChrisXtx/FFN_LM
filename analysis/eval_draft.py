@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(description='script to evaluate id recall')
 parser.add_argument('--gt', type=str, default='', help='ground truth data')
 parser.add_argument('--pred', type=str, default='', help='folder of predictions data')
 parser.add_argument('--size_thr', type=int, default=500, help='ground truth data')
-
+parser.add_argument('--overlap_thr', type=int, default=750, help='filter')
 
 args = parser.parse_args()
 
@@ -67,33 +67,24 @@ def evaluation(label, pred, file_name):
         recall = np.sum(tp) / gt_id_size
         f1score = 2 * (precision * recall) / (precision + recall)
 
-        if (np.sum(tp) < 400) | (np.sum(tp) < (gt_id_size * 0.25)) \
-            | (np.sum(tp) < (positive_size * 0.25)):
+        if (np.sum(tp) < args.overlap_thr):
+            
             fail_cnt += 1
             f1score = recall = precision = 0
-        if np.sum(tp) < 400:
-            fail_size += 1
-        if np.sum(tp) < (gt_id_size*0.25):
-            fail_r += 1 
-            fail_r_p += 1
-        if np.sum(tp) < positive_size*0.25:
-            fail_p += 1
-            fail_r_p += 1
-
+        
         if f1score != 0:
             t_f1score += f1score
             t_recall += recall
             t_precision += precision
             t_obj += 1
 
-        recall_list.append(recall)
-        precision_list.append(precision)
-        f1score_list.append(f1score)
+            recall_list.append(recall)
+            precision_list.append(precision)
+            f1score_list.append(f1score)
 
     print(file_name + " avg recall: {:.2f}%  avg precision: {:.2f}%  avg F1: {:.2f}%  fail rate: {:.2f}%  "
           .format(100*t_recall / t_obj, 100*t_precision / t_obj, 100*t_f1score / t_obj, 100*fail_cnt/(t_obj+fail_cnt)))
     print("objects in gt: {}  too small: {} reconstructed: {}".format(len(ids_l), small_cnt, t_obj))
-    print("fail_total: {} fail_Size: {}  fail_Recall: {}  fail_Precision: {}  fail_R&P: {}"
-          .format(fail_cnt, fail_size, fail_r, fail_p, fail_r_p))
+
 
     return recall_list, precision_list, f1score_list
