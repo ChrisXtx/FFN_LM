@@ -4,7 +4,7 @@
 #3，inference   
 
 
-
+![alt text](https://github.com/[username]/[reponame]/blob/[branch]/image.jpg?raw=true)
 ![sample](image.png)
 
 
