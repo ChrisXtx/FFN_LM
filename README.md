@@ -3,6 +3,8 @@
 #2，train   
 #3，inference   
 
+![FFN_loop](https://github.com/ChrisXtx/FFN_LM/blob/master/Demo/Fig_1.1.PNG?raw=true)
+
 
 
 ![sample](image.png)
