@@ -4,7 +4,7 @@
 
 
 
-![sample](image.png)
+![sample](https://github.com/ChrisXtx/FFN_LM/blob/master/Demo/Overview1.JPG?raw=true)
 ![FFN_loop](https://github.com/ChrisXtx/FFN_LM/blob/master/Demo/Fig_1.1.PNG?raw=true)
 ![merge masks](https://github.com/ChrisXtx/FFN_LM/blob/master/Demo/Fig_1.2.PNG?raw=true)
 ![Object-wise steps](https://github.com/ChrisXtx/FFN_LM/blob/master/Demo/1.3.PNG?raw=true)
